@@ -7,7 +7,7 @@ import logging
 __license__ = "BSD"
 __all__ = ['colors', 'Console', 'ConsoleBuffer']
 
-log = logging.getLogger('library.winconsole')
+log = logging.getLogger('pytality.winconsole')
 
 class colors:
     BLACK = 0
@@ -95,13 +95,18 @@ class Console:
     SetConsoleCursorInfo = windll.kernel32.SetConsoleCursorInfo
     SetConsoleCursorInfo.argtypes = (HANDLE, POINTER(CONSOLE_CURSOR_INFO))
 
-    GetCurrentConsoleFontEx = windll.kernel32.GetCurrentConsoleFontEx
-    GetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
-    GetCurrentConsoleFontEx.restype = BOOL
+    try:
+        #These functions are only available on Vista and above
+        GetCurrentConsoleFontEx = windll.kernel32.GetCurrentConsoleFontEx
+        GetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
+        GetCurrentConsoleFontEx.restype = BOOL
 
-    SetCurrentConsoleFontEx = windll.kernel32.SetCurrentConsoleFontEx
-    SetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
-    SetCurrentConsoleFontEx.restype = BOOL
+        SetCurrentConsoleFontEx = windll.kernel32.SetCurrentConsoleFontEx
+        SetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
+        SetCurrentConsoleFontEx.restype = BOOL
+    except:
+        GetCurrentConsoleFontEx = None
+        SetCurrentConsoleFontEx = None
 
     SetConsoleOutputCP = windll.kernel32.SetConsoleOutputCP
     SetConsoleOutputCP.argtypes = (UINT,)
@@ -127,7 +132,7 @@ class Console:
           __in_opt  HANDLE hTemplateFile
         );
         """
-        print 'setting up handle', name
+        log.info('Getting handle for %r', name)
         console_handle = self.CreateFile(
             create_string_buffer(name),
             self.GENERIC_WRITE | self.GENERIC_READ,
@@ -138,7 +143,6 @@ class Console:
             0, #dwflags
             0, #htemplate
             )
-        print 'got handle', console_handle
         if console_handle == self.Error:
             raise WinError()
         return console_handle
@@ -194,13 +198,17 @@ class Console:
         return collections.namedtuple('color', ('bg', 'fg'))(bg, fg)
 
     def get_font_info(self):
+        if self.GetCurrentConsoleFontEx is None:
+            log.warn("Unable to get the current console font; function not available before Windows Vista")
+            return None
         cfi = CONSOLE_FONT_INFO()
         cfi.size = sizeof(cfi)
         ret = self.GetCurrentConsoleFontEx(self.output, False, pointer(cfi))
         if not ret:
             raise WinError()
-        print cfi.font_size.x, cfi.font_size.y
-        print repr(cfi.font_index), repr(cfi.font_name)
+        log.info("Font information: w=%r, h=%r, index=%r, name=%r",
+                cfi.font_size.x, cfi.font_size.y,
+                repr(cfi.font_index), repr(cfi.font_name))
         return cfi
 
     def _get_screen_info(self):
@@ -233,7 +241,7 @@ class Console:
         attr = bg + fg
         self.SetConsoleTextAttribute(self.output, WORD(attr))
 
-    def set_code_page(code_page):
+    def set_code_page(self, code_page):
         #437: cp437
         #65001: utf-8?
         #only works for raster fonts.
@@ -257,6 +265,9 @@ class Console:
             raise WinError()
 
     def set_font_info(self, x=8, y=12, font=FONT_TERMINAL):
+        if self.SetCurrentConsoleFontEx is None:
+            log.warn("Unable to set the console font; function not available before Windows Vista")
+            return None
         cfi = self.get_font_info()
         cfi.font_size.x = x
         cfi.font_size.y = y

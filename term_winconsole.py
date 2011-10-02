@@ -134,7 +134,7 @@ def resize(width, height):
 
     #build a new "backing" buffer for double buffering
     global backing
-    backing = C.ConsoleBuffer(width, height)
+    backing = winconsole.ConsoleBuffer(width, height)
         
     
 def reset():
@@ -142,32 +142,38 @@ def reset():
     C.set_color(*defaultcolor)
     C.set_cursor_type(1)
 
-def settitle(title):
+def set_title(title):
     C.set_title(title)
 
-def setcursortype(i):
+def set_cursor_type(i):
     C.set_cursor_type(i)
 
-def draw_buffer(buf, start_x, start_y):
-    if buf.dirty:
-        #render the buffer to our backing
-        y = start_y
-        for row in source.data:
-            x = start_x
-            for fg, bg, ch in row[:source.width]:
-                #convert the character
-                coord = self.buffer[(y*source.width) + x]
-                coord.attr = fg + (bg << 4)
-                coord.ascii = ch
-                
-                x += 1
-                if x > backing.width:
-                    break
-            y += 1
-            if y > backing.height:
+def draw_buffer(source, start_x, start_y):
+    #log.debug("drawing a w=%r, h=%r buffer at x=%r, y=%r", source.width, source.height, start_x, start_y)
+    #log.debug("firstfour: %r", source._data[0][:4])
+    #render the buffer to our backing
+    y = start_y
+    for row in source._data:
+        if y >= backing.height:
+            break
+        x = start_x
+        for fg, bg, ch in row[:source.width]:
+            if x >= backing.width:
                 break
+            #log.debug("x=%r y=%r, fg=%r bg=%r ch=%r", x, y, fg, bg, ch)
+            #convert the character
+            try:
+                coord = backing.buffer[(y*backing.width) + x]
+            except:
+                log.exception("could not index x=%r, y=%r", x, y)
+                raise
+            coord.attr = fg + (bg << 4)
+            coord.ascii = ch
+            
+            x += 1
+        y += 1
 
-        buf.dirty = False
+    source.dirty = False
     return
 
 def raw_getkey():

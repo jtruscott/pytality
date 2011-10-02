@@ -9,7 +9,7 @@ __all__ = ['Buffer', 'BaseText', 'PlainText', 'RichText', 'Box']
 
 log = logging.getLogger('screen')
 
-class Buffer:
+class Buffer(object):
     """
     A buffer on the screen, representing a rectangular block of cells.
     Can have relatively-positioned children, which are drawn after (on top of) the parent.
@@ -76,17 +76,19 @@ class Buffer:
     @property
     def x(self):
         return self._x
+
     @x.setter
     def x(self, value):
-        self._x = x
+        self._x = value
         self.dirty = True
 
     @property
     def y(self):
         return self._y
+
     @y.setter
     def y(self, value):
-        self._y = y
+        self._y = value
         self.dirty = True
 
     @property
@@ -115,7 +117,8 @@ class Buffer:
         #xoff and yoff are screen offsets from our parent.
         x_offset = x_offset + self._x
         y_offset = y_offset + self._y
-        dirty = dirty or self.dirty
+        if self.dirty:
+            dirty = True
 
         #put ourselves on the screen
         if dirty:
@@ -123,7 +126,7 @@ class Buffer:
 
         #have our children do similar
         for child in self.children:
-            child.draw(x_offset + self.x_padding, y_offset + self.y_padding, dirty)
+            child.draw(x_offset + self.padding_x, y_offset + self.padding_y, dirty)
 
     def _reset_data(self):
         rows = []
@@ -259,13 +262,14 @@ class RichText(BaseText):
     """
     colorRE = re.compile(r'([^<]*)<([\w]*|/)>')
 
-    def __init__(self, message, wrap_to=None, **kwargs):
+    def __init__(self, message, wrap_to=None, bg=term.colors.BLACK, **kwargs):
         """
         wrap_to:
             Wrap the message at a maximum of N characters in width.
             No special logic is performed for tracking words or hyphenating.
         """
         self.wrap_to = wrap_to
+        self.bg = bg
         BaseText.__init__(self, message, **kwargs)
 
     def update_data(self):
@@ -280,7 +284,7 @@ class RichText(BaseText):
                     rows.append(row)
                     row = []
                     continue
-                row.append((part_color, self.bg, c))
+                row.append([part_color, self.bg, c])
         
         rows.append(row)
 
@@ -302,20 +306,21 @@ class RichText(BaseText):
         width = max([len(r) for r in rows])
         for row in rows:
             while len(row) < width:
-                row.append((self.fg, self.bg, ' '))
+                row.append([self.bg, self.bg, ' '])
         
         
         #finish
         self.width = width
         self.height = len(rows)
-        self.data = rows
+        #log.debug("text w=%r, h=%r, part0=%r", self.width, self.height, message_parts[0] if message_parts else None)
+        self._data = rows
         self.dirty = True
 
     def parse(self):
         raw_msg = self.message.rstrip('\n')
         raw_parts = filter(None, self.colorRE.split(raw_msg))
         message_parts = []
-        color_stack = [term.LIGHTGREY]
+        color_stack = [term.colors.LIGHTGREY]
         for part in raw_parts:
             if part == '/':
                 #go back a color
@@ -326,7 +331,7 @@ class RichText(BaseText):
             else:
                 #it's a text component
                 message_parts.append((color_stack[-1], part))
-        #log.debug("len: %r parts: %r", total_len, message_parts)
+        #log.debug("parts: %r", message_parts)
         return message_parts
 
 
@@ -393,12 +398,8 @@ class Box(Buffer):
         if draw_bottom:
             data.append([[border_fg, border_bg, bl]] + ([[border_fg, border_bg, horiz]]*(width-2)) + [[border_fg, border_bg, br]])
 
-        self._data = data
         Buffer.__init__(self,
                         width=width, height=height,
-                        padding_x=padding_x+1, padding_y=padding_y+1,
+                        padding_x=padding_x+0, padding_y=padding_y+0,
+                        data=data,
                         **kwargs)
-
-if __name__ == "__main__":
-    left_pointer = PlainText(fg=term.colors.WHITE, bg=term.colors.BLACK, message=term.Pointer.left)
-    right_pointer = PlainText(fg=term.colors.WHITE, bg=term.colors.BLACK, message=term.Pointer.right)
