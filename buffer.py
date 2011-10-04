@@ -133,7 +133,7 @@ class Buffer(object):
         for y in range(self.height):
             row = []
             for x in range(self.width):
-                row.append((term.colors.BLACK, term.colors.BLACK, ' '))
+                row.append([term.colors.BLACK, term.colors.BLACK, ' '])
             rows.append(row)
         self._data = rows
     
