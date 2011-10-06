@@ -1,5 +1,5 @@
 import logging
-
+import sys
 class NoConsoleAvailableError(Exception):
     pass
 
@@ -12,10 +12,15 @@ def _find_impl():
     """
     Find a suitable terminal implementation.
     """
-    choices = ['winconsole', 'curses']
+    choices = ['silverlight', 'winconsole', 'curses']
     
     success = False
     for choice in choices:
+        if choice == 'silverlight' and sys.platform == 'silverlight':
+            import term_silverlight as _impl
+            log.debug("Imported term_silverlight successfully")
+            success = True
+            break
         if choice == 'winconsole':
             try:
                 import term_winconsole as _impl

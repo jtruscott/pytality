@@ -1,0 +1,24 @@
+body {
+    background-color: #040404; margin: 0;
+}
+body > span {
+position: absolute; left: -1em; top: 0;
+}
+
+#message_zone {
+    position: absolute;
+    color: white;
+    width: 15em;
+    height: 100%;
+}
+#Screen {
+    position: relative;
+    display: block;
+    margin: auto;
+    background-color: black;
+    border: 16px #020202 solid;
+}
+
+body div.silverlightDlrWindowMenu {
+    background-color: #030303;
+}
