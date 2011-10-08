@@ -122,7 +122,6 @@ def init(use_cp437=True):
 #----------------------------------------------------------------------------
 #Actual functions
 
-all_dirty = False
 def flip():
     backing.draw(C, backing.width, backing.height, 0, 0)
 

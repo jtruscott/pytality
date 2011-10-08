@@ -72,7 +72,7 @@ function flip_cells() {
 }
 
 function reset_cells() {
-    buffer_ctx.fillRect(0, 0, buffer_ctx.width, buffer_ctx.height);
+    buffer_ctx.fillRect(0, 0, buffer.width, buffer.height);
     screen_ctx.drawImage(buffer, 0, 0);
 
 }
