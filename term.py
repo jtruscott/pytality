@@ -21,7 +21,7 @@ def _find_impl():
             log.debug("Imported term_silverlight successfully")
             success = True
             break
-        if choice == 'winconsole':
+        if choice == 'winconsole' and sys.platform == 'win32':
             try:
                 import term_winconsole as _impl
                 log.debug("Imported term_winconsole successfully")
@@ -48,7 +48,7 @@ def _find_impl():
 impl = _find_impl()
 colors = impl.colors
 
-def init(width=80, height=24, use_cp437=True):
+def init(width=80, height=24):
     """
     Initialize the terminal and check that it's of an appropriate size.
     Also disables the cursor image to avoid flickery drawings. Use set_cursor_state
@@ -59,15 +59,10 @@ def init(width=80, height=24, use_cp437=True):
         Minimum dimensions of the screen.
         Note that on linux, a 1-row/column margin is added on the edge
         to prevent spurious failures.
-
-    use_cp437:
-        Set the console mode to codepage437, if possible.
-        Not using this will better allow unicode but has terrible testing.
-
     """
     log.debug("init(): initializing terminal")
 
-    impl.init(use_cp437)
+    impl.init()
     resize(width, height)
 
 def reset():
