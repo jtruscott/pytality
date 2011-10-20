@@ -1,4 +1,4 @@
-class BoxType:
+class BoxType(object):
     """
     A class containing the various line-drawing characters used in
     drawing CP437 boxes.
@@ -27,3 +27,9 @@ class BoxSingle(BoxType):
     bl = chr(0xC0)
     tr = chr(0xBF)
     br = chr(0xD9)
+
+class CursorSingle(object):
+    """
+    A class containing the various line-drawing characters for messagebox scroll cursors
+    """
+    top = ' '

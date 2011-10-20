@@ -132,7 +132,7 @@ class Console:
           __in_opt  HANDLE hTemplateFile
         );
         """
-        log.info('Getting handle for %r', name)
+        #log.info('Getting handle for %r', name)
         console_handle = self.CreateFile(
             create_string_buffer(name),
             self.GENERIC_WRITE | self.GENERIC_READ,

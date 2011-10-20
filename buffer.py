@@ -5,9 +5,9 @@ import boxtypes
 import term
 
 __license__ = "BSD"
-__all__ = ['Buffer', 'BaseText', 'PlainText', 'RichText', 'Box']
+__all__ = ['Buffer', 'BaseText', 'PlainText', 'RichText', 'Box', 'MessageBox']
 
-log = logging.getLogger('screen')
+log = logging.getLogger('pytality.buffer')
 
 class Buffer(object):
     """
@@ -120,6 +120,7 @@ class Buffer(object):
         if self.dirty:
             dirty = True
 
+        #log.debug("%r dirty? %r", self, dirty)
         #put ourselves on the screen
         if dirty:
             term.draw_buffer(self, x_offset, y_offset)
@@ -262,13 +263,22 @@ class RichText(BaseText):
     """
     colorRE = re.compile(r'([^<]*)<([\w]*|/)>')
 
-    def __init__(self, message, wrap_to=None, bg=term.colors.BLACK, **kwargs):
+    def __init__(self, message, wrap_to=None, initial_color=term.colors.LIGHTGREY, bg=term.colors.BLACK, **kwargs):
         """
         wrap_to:
             Wrap the message at a maximum of N characters in width.
             No special logic is performed for tracking words or hyphenating.
+
+        initial_color:
+            The foreground color that the message will start out as.
+            Defaults to LIGHTGREY.
+
+        bg:
+            The background color for the message.
+            Defaults to BLACK.
         """
         self.wrap_to = wrap_to
+        self.initial_color = initial_color
         self.bg = bg
         BaseText.__init__(self, message, **kwargs)
 
@@ -320,7 +330,7 @@ class RichText(BaseText):
         raw_msg = self.message.rstrip('\n')
         raw_parts = filter(None, self.colorRE.split(raw_msg))
         message_parts = []
-        color_stack = [term.colors.LIGHTGREY]
+        color_stack = [self.initial_color]
         for part in raw_parts:
             if part == '/':
                 #go back a color
@@ -374,32 +384,207 @@ class Box(Buffer):
             sides are enabled.
         """
         data = []
-        (blank, horiz, vert, tl, tr, bl, br) = (boxtype.blank, boxtype.horiz, boxtype.vert, boxtype.tl, boxtype.tr, boxtype.bl, boxtype.br)
+        
+        #break out the constants we've been given
+        blank, horiz, vert, tl, tr, bl, br = (boxtype.blank, boxtype.horiz, boxtype.vert, boxtype.tl, boxtype.tr, boxtype.bl, boxtype.br)
         vert_left = vert_right = vert
+
+
+        #form cell descriptions
+        tl_cell = [border_fg, border_bg, tl]
+        tr_cell = [border_fg, border_bg, tr]
+        bl_cell = [border_fg, border_bg, bl]
+        br_cell = [border_fg, border_bg, br]
+
+        horiz_cell = [border_fg, border_bg, horiz]
+        left_cell = [border_fg, border_bg, vert_left]
+        interior_cell = [interior_fg, interior_bg, blank]
+        right_cell = [border_fg, border_bg, vert_right]
+        
+        #override sides we aren't drawing
+        #(note that skipping 'top' and 'bottom' simply draws one more interior row
         if not draw_left:
-            vert_left = boxtype.blank
-            tl = bl = boxtype.horiz
+            left_cell = interior_cell
+            tl_cell = horiz_cell
+            bl_cell = horiz_cell
 
         if not draw_right:
-            vert_right = boxtype.blank
-            tr = br = boxtype.horiz
+            right_cell = interior_cell
+            tr_cell = horiz_cell
+            br_cell = horiz_cell
 
-        mid_rows = height
+        #create the buffer data
+        interior_rows = height
+
         if draw_top:
-            mid_rows -= 1
-            data.append([[border_fg, border_bg, tl]] + ([[border_fg, border_bg, horiz]]*(width-2)) + [[border_fg, border_bg, tr]])
+            interior_rows -= 1
+            data.append([tl_cell] + ([horiz_cell]*(width-2)) + [tr_cell])
 
         if draw_bottom:
-            mid_rows -= 1
+            interior_rows -= 1
 
-        for row in range(mid_rows):
-            data.append([[border_fg, border_bg, vert_left]] + ([[interior_fg, interior_bg, blank]]*(width-2)) + [[border_fg, border_bg, vert_right]])
+        for row in range(interior_rows):
+            data.append([left_cell] + ([interior_cell]*(width-2)) + [right_cell])
 
         if draw_bottom:
-            data.append([[border_fg, border_bg, bl]] + ([[border_fg, border_bg, horiz]]*(width-2)) + [[border_fg, border_bg, br]])
+            data.append([bl_cell] + ([horiz_cell]*(width-2)) + [br_cell])
 
+        #put the buffer together
         Buffer.__init__(self,
                         width=width, height=height,
                         padding_x=padding_x+0, padding_y=padding_y+0,
                         data=data,
                         **kwargs)
+
+class MessageBox(Box):
+    """
+    A MessageBox is a type of box that is designed to hold a stream of RichText
+    messages and be "scrolled" up and down.
+
+    MessageBuffers act as Box buffers that automatically manage their children. Consequently,
+    modifications to .children will be lost.
+
+    cursor_boxtype:
+    cursor_fg_color:
+    autoscroll:
+    logger_name:
+    """
+    def __init__(self,
+                width, height,
+                cursor_boxtype=boxtypes.CursorSingle, cursor_fg_color=term.colors.WHITE,
+                auto_scroll=True,
+                logger_name="pytality.buffer.MessageBox",
+                **kwargs):
+        
+        Box.__init__(self,
+            width=width, height=height,
+            **kwargs)
+        
+        self.messages = []
+        self.offset = 0
+        self.auto_scroll = auto_scroll
+        self.logger = logging.getLogger(logger_name)
+
+
+        #setup our sub-buffers
+        #the scroll cursor
+        self.cursor_boxtype = cursor_boxtype
+        self.scroll_cursor = PlainText(cursor_boxtype.top)
+        #'partial' message buffers for linewrapped messages
+        self.top_partial_message = Buffer(self.inner_width, 1)
+        self.bottom_partial_message = Buffer(self.inner_width, 1)
+        
+        #update our positioning
+        self.scroll(home=True)
+
+    def add(self, msg, scroll=None):
+        if scroll is None:
+            scroll = self.auto_scroll
+
+        message = RichText(msg, wrap_to=self.inner_width)
+        self.messages.append(message)
+
+        if scroll:
+            self.scroll(end=True)
+        else:
+            self.recalculate_buffers()
+
+    def scroll(self, delta=0, home=False, end=False):
+        """
+        Scroll the message log.
+        The amount to scroll can be specified in one of three possible ways.
+
+        delta:
+            Scroll down X lines (or up X lines if X is negative)
+        home:
+            Scroll to the top of the log (as in the home key)
+        end:
+            Scroll to the bottom of the log (as in the end key)
+        """
+        total_lines = sum([msg.height for msg in self.messages])
+
+        if home:
+            offset = 0
+        elif end:
+            offset = total_lines
+        else:
+            offset = self.offset + delta
+
+
+        #maximum the last line on the screen
+        if offset + self.inner_height > total_lines:
+            offset = total_lines - self.inner_height
+        
+        #minimum 0
+        if offset < 0:
+            offset = 0
+        self.offset = offset
+        self.logger.debug("new offset: %r, len: %r, total: %r", offset, len(self.messages), total_lines)
+        self.recalculate_buffers()
+
+    def recalculate_buffers(self):
+        """
+        Recalculate the positioning and contents of message buffers for a new scroll offset.
+        """
+        def make_partial_message(msg, target, start=0, end=None, y=0):
+            msg_data = msg._data
+            if end is None:
+                end = len(msg_data)
+
+            self.logger.debug("slicing: %r:%r at y=%r", start, end, y)
+            msg_data = msg_data[start:end]
+            target._data = msg_data
+            target.height = len(msg_data)
+            target.width = msg.width
+            target.y = y
+
+        top_offset = self.offset
+        bottom_offset = top_offset + self.inner_height
+
+        #make our partial-messages invisible unless needed
+        self.top_partial_message.width = 0
+        self.top_partial_message.height = 0
+        self.bottom_partial_message.width = 0
+        self.bottom_partial_message.height = 0
+
+        child_list = []
+        #Keep track of our current, cumulative Y offset
+        lineno = 0
+        for message in self.messages:
+            bottom = lineno + message.height
+            if bottom > top_offset > lineno:
+                if bottom < bottom_offset:
+                    #this message crosses the top edge - we need to split it
+                    self.logger.debug("crosses top of %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
+                    make_partial_message(message, self.top_partial_message,
+                                        start=(message.height - (bottom - top_offset)), y=0)
+
+                else:
+                    #and it also crosses the bottom!
+                    self.logger.debug("crosses top and bottom of %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
+                    make_partial_message(message, self.top_partial_message, 
+                                        start=(message.height - (bottom - top_offset)), end=(bottom_offset - lineno), y=0)
+
+            elif bottom > bottom_offset > lineno:
+                #this message crosses the bottom edge - we need to split it
+                self.logger.debug("crosses bottom of %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
+                make_partial_message(message, self.top_partial_message, 
+                                    end=(bottom_offset - lineno), y=(lineno - top_offset))
+
+            else:
+                if lineno >= top_offset and lineno <= bottom_offset:
+                    #this message belongs in our list
+                    self.logger.debug("belongs in %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
+                    new_y = (lineno - top_offset)
+                    self.logger.debug("new y: %r", new_y)
+                    message.y = new_y
+                    child_list.append(message)
+
+                else:
+                    #this message does not belong
+                    self.logger.debug("throwaway in %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
+                    
+            lineno = bottom
+
+        self.children = [self.scroll_cursor, self.top_partial_message] + child_list + [self.bottom_partial_message]
+        self.dirty = True

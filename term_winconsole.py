@@ -180,6 +180,13 @@ def draw_buffer(source, start_x, start_y):
     source.dirty = False
     return
 
+def get_at(x, y):
+    coord = backing.buffer[(y*backing.width) + x]
+    ch = coord.ascii
+    fg = coord.attr & 0xF
+    bg = (coord.attr >> 4) & 0xF
+    return [fg, bg, ch]
+
 def raw_getkey():
     key = msvcrt.getwch()
     log.debug('key: %r', key)

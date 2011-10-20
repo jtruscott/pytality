@@ -135,6 +135,21 @@ def draw_buffer(source, start_x, start_y):
     source.dirty = False
     return
 
+def get_at(x, y):
+    data = scr.inch(y, x)
+    #inch returns attr in the high bits, char in the low bits
+    ch = data & 0xFF
+    attr = data & 0xFFFF00
+
+    #and attr can be backwards lookedup and turned into a color set
+    key_index = color_pairs.values().index(attr)
+    cfg, cbg, cbold = color_pairs.keys()[key_index]
+    #that can turn into a color in our world
+    fg = (cfg, cbold)
+    bg = (cbg, False)
+
+    return [fg, bg, ch]
+
 #--------------------------------------
 #Input functions
 

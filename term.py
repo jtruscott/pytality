@@ -122,6 +122,16 @@ def flip():
     """
     impl.flip()
 
+def get_at(x, y):
+    """
+    Get a character from the screen at the specified coordinate.
+    Generally, you shouldn't need this function, but uses come up from time to time,
+    most notably testing.
+
+    Returns [fg, bg, character]
+    """
+    return impl.get_at(x, y)
+
 def set_cursor_type(cursor_type):
     """
     Change the terminal cursor graphic.
