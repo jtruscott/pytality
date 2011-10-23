@@ -146,6 +146,9 @@ def reset():
     C.set_color(*defaultcolor)
     C.set_cursor_type(1)
 
+def move_cursor(x, y):
+    C.move_cursor(x, y)
+
 def set_title(title):
     C.set_title(title)
 

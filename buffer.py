@@ -105,13 +105,15 @@ class Buffer(object):
         Modify the properties of a cell at (x, y).
         Also dirties the buffer for the next draw.
         """
-        cell = self._data[y][x]
+        #copy it! shared references can do hilarious things
+        cell = self._data[y][x][:]
         if fg is not None:
             cell[0] = fg
         if bg is not None:
             cell[1] = bg
         if char is not None:
             cell[2] = char
+        self._data[y][x] = cell
         self.dirty = True
 
     def draw(self, x_offset=0, y_offset=0, dirty=False):
@@ -121,7 +123,7 @@ class Buffer(object):
         if self.dirty:
             dirty = True
 
-        #log.debug("%r dirty? %r", self, dirty)
+        #log.debug("%r dirty=%r, x_offset=%r, y_offset=%r", self, dirty, x_offset, y_offset)
         #put ourselves on the screen
         if dirty:
             term.draw_buffer(self, x_offset, y_offset)
@@ -672,3 +674,107 @@ class BlockScrollbar(Scrollbar):
             data.append([[self.fg, self.bg, self.boxtype.scrollbar_center_block]])
         
         self._data = data
+
+#-----------------------------------------------------------------------------
+
+class BufferView(Buffer):
+    """
+    A specialized buffer that acts as a 'view' upon another, larger buffer.
+    Provides the fields view_x and view_y; when drawn, the area to draw is offset
+    by those coordinates.
+
+    Note that this does it's magic via __iter__, and thus mandates that future
+    term implementations use "
+        for row in _data:
+            for cell in row[:max_width]:
+    "
+    to iterative over buffers, which is currently true.
+    """
+    def __init__(self, width, height, parent, view_x=0, view_y=0, **kwargs):
+        Buffer.__init__(self, width=width, height=height, **kwargs)
+        self._view_x = view_x
+        self._view_y = view_y
+        self.parent = parent
+        self._data = self.DataView(self)
+
+    @property
+    def view_x(self):
+        return self._view_x
+
+    @view_x.setter
+    def view_x(self, value):
+        self._view_x = value
+        self.dirty = True
+
+    @property
+    def view_y(self):
+        return self._view_y
+
+    @view_y.setter
+    def view_y(self, value):
+        self._view_y = value
+        self.dirty = True
+
+    def scroll(self, x=0, y=0):
+        x += self._view_x
+        y += self._view_y
+
+        #x = min(x, (self.parent.width - self.width))
+        #y = min(y, (self.parent.height - self.height))
+
+        x = max(0, x)
+        y = max(0, y)
+
+        log.debug("scroll: x=%r, y=%r", x, y)
+        self._view_x = x
+        self._view_y = y
+        self.dirty = True
+
+    class DataView(list):
+        def __init__(self, buf):
+            self.buf = buf
+            super(BufferView.DataView, self).__init__(buf._data)
+
+        def __iter__(self):
+            return BufferView.RowIterator(self.buf)
+
+    class RowIterator(collections.Iterator):
+        def __init__(self, buf):
+            super(BufferView.RowIterator, self).__init__()
+            self.buf = buf
+            self.idx = -1
+        
+        def next(self):
+            self.idx += 1
+            row_idx = self.buf._view_y + self.idx
+            if row_idx < self.buf.parent.height and row_idx < len(self.buf.parent._data):
+                val = self.buf.parent._data[row_idx]
+                return BufferView.CellIterator(self.buf, val)
+            else:
+                raise StopIteration()
+   
+    class CellIterator(collections.Iterator):
+        def __init__(self, buf, row):
+            super(BufferView.CellIterator, self).__init__()
+            self.buf = buf
+            self.row = row
+            self.idx = -1
+            self.start = 0
+            self.end = len(self.row)
+        
+        def next(self):
+            self.idx += 1
+            cell_idx = self.start + self.buf._view_x + self.idx
+            if cell_idx < self.buf.parent.width and cell_idx < len(self.row) and cell_idx < self.end:
+                val = self.row[cell_idx]
+                return val
+            else:
+                raise StopIteration()
+
+        def __getitem__(self, key):
+            if isinstance(key, slice):
+                if key.start is not None:
+                    self.start = key.start
+                if key.stop is not None:
+                    self.end = key.stop
+            return self

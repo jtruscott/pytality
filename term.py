@@ -132,6 +132,12 @@ def get_at(x, y):
     """
     return impl.get_at(x, y)
 
+def move_cursor(x, y):
+    """
+    Position the text cursor at a coordinate on the screen.
+    """
+    return impl.move_cursor(x, y)
+
 def set_cursor_type(cursor_type):
     """
     Change the terminal cursor graphic.
@@ -151,7 +157,7 @@ def set_cursor_type(cursor_type):
     )
     if cursor_type in cursor_type_map:
         cursor_type = cursor_type_map[cursor_type]
-    impl.set_cursor_type(i)
+    impl.set_cursor_type(cursor_type)
 
 def set_title(title):
     """
@@ -177,6 +183,7 @@ def getkey():
     and perform some translations.
 
     ^C raises KeyboardInterrupt
+    CTRL+<letter> key combinations return 'ctrl-<letter>'
     """
     while True:
         key = impl.raw_getkey()
@@ -187,4 +194,7 @@ def getkey():
             #ctrl-c
             raise KeyboardInterrupt()
         
+        if len(key) == 1 and  (1 <= ord(key) <= 26):
+            #ctrl+letter
+            return "ctrl-%s" % chr(ord(key) + 96)
         return key

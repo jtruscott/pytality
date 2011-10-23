@@ -285,7 +285,7 @@ class Console:
         Change the size of the console window.
         This is a little bizarre:
         - SetConsoleScreenBufferSize _cannot_ change to a size
-        smaller than the current window size, but can increase the size (and will resize the window)
+        smaller than the current window size, but can increase the buffer size
 
         - SetConsoleWindowInfo _cannot_ increase the size of the window, but can decrease the size
         """
@@ -294,12 +294,24 @@ class Console:
         current_height = csbi.size.y
         log.debug("set_size: current_width = %r, current_height = %r", current_width, current_height)
         if current_width >= width or current_height >= height:
-            #first, we need to go smaller
+            #first, we're gonna need a smaller window
             ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, width-1, height-1))
+            if not ret:
+                raise WinError()
+            #then, we're gonna need a smaller buffer
+            ret = self.SetConsoleScreenBufferSize(self.output, COORD(width, height))
+            if not ret:
+                raise WinError()
 
-        ret = self.SetConsoleScreenBufferSize(self.output, COORD(width, height))
-        if not ret:
-            raise WinError()
+        else:
+            #first, we're gonna need a bigger buffer
+            ret = self.SetConsoleScreenBufferSize(self.output, COORD(width, height))
+            if not ret:
+                raise WinError()
+            #then, we're gonna need a matching window size
+            ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, width-1, height-1))
+            if not ret:
+                raise WinError()
     
     def set_title(self, title):
         self.SetConsoleTitle(create_unicode_buffer(title))

@@ -9,6 +9,10 @@ colors = term.colors
 
 import buffer, boxtypes
 
+import pprint
+import logging
+log = logging.getLogger("test")
+
 class SPACE:
     pass
 
@@ -137,7 +141,7 @@ class Box(PytalityCase):
         self.check(13, 12, SPACE)
         self.check(17, 17, boxtypes.BoxDouble.br, fg=colors.RED, bg=colors.LIGHTRED)
 
-    def test_permute(self):
+    def skip_test_permute(self):
         import cgitb
         try:
             for x in [0, 10]:
@@ -159,8 +163,19 @@ class Box(PytalityCase):
             term.resize(width=self.width, height=300)
             cgitb.Hook(format="text").handle()
             raise
-
-
+    
+    def test_set_at(self):
+        box = buffer.Box(x=20, y=20, width=6, height=6)
+        self.draw_box(box)
+        log.debug(pprint.pformat(box._data))
+        box.set_at(2, 2, '0', colors.LIGHTGREY)
+        log.debug(pprint.pformat(box._data))
+        box.draw()
+        term.flip()
+        self.check(12, 12, '0')
+        self.check(13, 13, ' ')
+        self.check(12, 13, ' ')
+        self.check(13, 12, ' ')
 
 class MessageBox(PytalityCase):
     def add(self, msg, **kwargs):
