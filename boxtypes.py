@@ -11,6 +11,14 @@ class BoxType(object):
     tr = ' '
     br = ' '
 
+    scrollbar_top = chr(0xD1)
+    scrollbar_bottom = chr(0xCF)
+    scrollbar_center = chr(0xD8)
+
+    scrollbar_center_block = chr(0xDB)
+    scrollbar_bottom_block = chr(0xDC)
+    scrollbar_top_block = chr(0xDF)
+
 class BoxDouble(BoxType):
     blank = ' '
     horiz = chr(0xCD)
@@ -27,9 +35,3 @@ class BoxSingle(BoxType):
     bl = chr(0xC0)
     tr = chr(0xBF)
     br = chr(0xD9)
-
-class CursorSingle(object):
-    """
-    A class containing the various line-drawing characters for messagebox scroll cursors
-    """
-    top = ' '

@@ -1,5 +1,6 @@
 import re
 import collections
+import math
 import logging
 import boxtypes
 import term
@@ -350,12 +351,11 @@ class RichText(BaseText):
 class Box(Buffer):
     """
     A subclass of Buffer for creating a rectangular box with borders.
-    Note that because of the borders, padding_x/padding_y are automatically
-    increased by 1.
+    Note that because of the borders, padding_x/padding_y default to 1
     """
     def __init__(self,
                 width, height,
-                padding_x=0, padding_y=0,
+                padding_x=1, padding_y=1,
                 border_fg=term.colors.WHITE, border_bg=term.colors.BLACK,
                 interior_fg=term.colors.WHITE, interior_bg=term.colors.BLACK,
                 boxtype=boxtypes.BoxDouble,
@@ -383,12 +383,17 @@ class Box(Buffer):
             Note that 'corner' characters will only be drawn if both relevant
             sides are enabled.
         """
+
+        #store variables
+        self.boxtype = boxtype
+        self.border_fg, self.border_bg = border_fg, border_bg
+        self.interior_fg, self.interior_bg = interior_fg, interior_bg
+        self.draw_top, self.draw_bottom = draw_top, draw_bottom
+        self.draw_left, self.draw_right = draw_left, draw_right
         data = []
         
-        #break out the constants we've been given
+        #break out the boxtype constants we've been given
         blank, horiz, vert, tl, tr, bl, br = (boxtype.blank, boxtype.horiz, boxtype.vert, boxtype.tl, boxtype.tr, boxtype.bl, boxtype.br)
-        vert_left = vert_right = vert
-
 
         #form cell descriptions
         tl_cell = [border_fg, border_bg, tl]
@@ -397,9 +402,9 @@ class Box(Buffer):
         br_cell = [border_fg, border_bg, br]
 
         horiz_cell = [border_fg, border_bg, horiz]
-        left_cell = [border_fg, border_bg, vert_left]
+        left_cell = [border_fg, border_bg, vert]
         interior_cell = [interior_fg, interior_bg, blank]
-        right_cell = [border_fg, border_bg, vert_right]
+        right_cell = [border_fg, border_bg, vert]
         
         #override sides we aren't drawing
         #(note that skipping 'top' and 'bottom' simply draws one more interior row
@@ -432,9 +437,10 @@ class Box(Buffer):
         #put the buffer together
         Buffer.__init__(self,
                         width=width, height=height,
-                        padding_x=padding_x+0, padding_y=padding_y+0,
+                        padding_x=padding_x, padding_y=padding_y,
                         data=data,
                         **kwargs)
+
 
 class MessageBox(Box):
     """
@@ -444,32 +450,37 @@ class MessageBox(Box):
     MessageBuffers act as Box buffers that automatically manage their children. Consequently,
     modifications to .children will be lost.
 
+    cursor_offset:
     cursor_boxtype:
     cursor_fg_color:
     autoscroll:
-    logger_name:
     """
     def __init__(self,
                 width, height,
-                cursor_boxtype=boxtypes.CursorSingle, cursor_fg_color=term.colors.WHITE,
+                padding_x=1, padding_y=1,
+                scrollbar_type="edge", scrollbar_fg_color=term.colors.WHITE,
                 auto_scroll=True,
-                logger_name="pytality.buffer.MessageBox",
                 **kwargs):
         
         Box.__init__(self,
             width=width, height=height,
+            padding_x=padding_x, padding_y=padding_y,
             **kwargs)
         
         self.messages = []
         self.offset = 0
         self.auto_scroll = auto_scroll
-        self.logger = logging.getLogger(logger_name)
-
 
         #setup our sub-buffers
         #the scroll cursor
-        self.cursor_boxtype = cursor_boxtype
-        self.scroll_cursor = PlainText(cursor_boxtype.top)
+        if scrollbar_type == "edge":
+            scroll_cursor = EdgeScrollbar(self.boxtype)
+        else:
+            scroll_cursor = BlockScrollbar(self.boxtype)
+
+        self.scroll_cursor = scroll_cursor
+        self.scrollbar_offset = scroll_cursor.right_margin
+
         #'partial' message buffers for linewrapped messages
         self.top_partial_message = Buffer(self.inner_width, 1)
         self.bottom_partial_message = Buffer(self.inner_width, 1)
@@ -481,7 +492,7 @@ class MessageBox(Box):
         if scroll is None:
             scroll = self.auto_scroll
 
-        message = RichText(msg, wrap_to=self.inner_width)
+        message = RichText(msg, wrap_to=self.inner_width - max(0, self.scrollbar_offset))
         self.messages.append(message)
 
         if scroll:
@@ -519,7 +530,6 @@ class MessageBox(Box):
         if offset < 0:
             offset = 0
         self.offset = offset
-        self.logger.debug("new offset: %r, len: %r, total: %r", offset, len(self.messages), total_lines)
         self.recalculate_buffers()
 
     def recalculate_buffers(self):
@@ -531,7 +541,6 @@ class MessageBox(Box):
             if end is None:
                 end = len(msg_data)
 
-            self.logger.debug("slicing: %r:%r at y=%r", start, end, y)
             msg_data = msg_data[start:end]
             target._data = msg_data
             target.height = len(msg_data)
@@ -555,36 +564,111 @@ class MessageBox(Box):
             if bottom > top_offset > lineno:
                 if bottom < bottom_offset:
                     #this message crosses the top edge - we need to split it
-                    self.logger.debug("crosses top of %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
                     make_partial_message(message, self.top_partial_message,
                                         start=(message.height - (bottom - top_offset)), y=0)
 
                 else:
                     #and it also crosses the bottom!
-                    self.logger.debug("crosses top and bottom of %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
                     make_partial_message(message, self.top_partial_message, 
                                         start=(message.height - (bottom - top_offset)), end=(bottom_offset - lineno), y=0)
 
             elif bottom > bottom_offset > lineno:
                 #this message crosses the bottom edge - we need to split it
-                self.logger.debug("crosses bottom of %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
                 make_partial_message(message, self.top_partial_message, 
                                     end=(bottom_offset - lineno), y=(lineno - top_offset))
 
             else:
-                if lineno >= top_offset and lineno <= bottom_offset:
+                if lineno >= top_offset and bottom <= bottom_offset:
                     #this message belongs in our list
-                    self.logger.debug("belongs in %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
                     new_y = (lineno - top_offset)
-                    self.logger.debug("new y: %r", new_y)
                     message.y = new_y
                     child_list.append(message)
 
                 else:
                     #this message does not belong
-                    self.logger.debug("throwaway in %r-%r: %r-%r", top_offset, bottom_offset, lineno, bottom)
+                    if bottom > bottom_offset:
+                        #no further messages will be appearing
+                        break
                     
             lineno = bottom
 
+        #update the scroll cursor
+        total_height = sum([m.height for m in self.messages])
+        self.scroll_cursor.reposition(top_offset, bottom_offset, total_height, self)
+
+
         self.children = [self.scroll_cursor, self.top_partial_message] + child_list + [self.bottom_partial_message]
         self.dirty = True
+
+class Scrollbar(PlainText):
+    right_margin = 0
+    def __init__(self, boxtype):
+        self.boxtype = boxtype
+        PlainText.__init__(self, boxtype.scrollbar_top)
+
+class EdgeScrollbar(Scrollbar):
+    """
+    A scrollbar designed to be placed on the right border of a Box.
+    Occupies a 1x1 space.
+    """
+    def reposition(self, top_offset, bottom_offset, message_height, viewport):
+        lowest_offset = message_height - viewport.inner_height
+        if lowest_offset > 0:
+            cur_pct = (float(top_offset) / lowest_offset)
+            cur_y = cur_pct * (viewport.inner_height - 1)
+            cur_y = int(round(cur_y))
+
+        else:
+            cur_y = 0
+
+        self.y = cur_y
+        self.x = viewport.inner_width + viewport.padding_x - 1
+
+        if top_offset <= 0:
+            self.set_at(0, 0, self.boxtype.scrollbar_top)
+        elif bottom_offset >= message_height:
+            self.set_at(0, 0, self.boxtype.scrollbar_bottom)
+        else:
+            self.set_at(0, 0, self.boxtype.scrollbar_center)
+
+class BlockScrollbar(Scrollbar):
+    """
+    A scrollbar designed to be placed in the right margin of a Box.
+    Occupies a variable amount of vertical space.
+    """
+    right_margin = 1
+    def reposition(self, top_offset, bottom_offset, message_height, viewport):
+        self.x = viewport.inner_width - viewport.padding_x
+
+        if not message_height or (top_offset == 0 and bottom_offset >= message_height):
+            #There's no need for scrolling at all
+            self.height = 0
+            self.width = 0
+            self.y = 0
+            return
+           
+        top_pct = (float(top_offset) / message_height)
+        top_y = top_pct * (viewport.inner_height)
+
+        bottom_pct = (float(bottom_offset) / message_height)
+        bottom_y = bottom_pct * (viewport.inner_height)
+        
+        self.y = int(math.floor(top_y))
+        self.height = int(math.ceil(bottom_y) - math.floor(top_y))
+        self.width = 1
+
+        data = []
+        if (top_y % 1) > 0.5:
+            data.append([[self.fg, self.bg, self.boxtype.scrollbar_bottom_block]])
+        else:
+            data.append([[self.fg, self.bg, self.boxtype.scrollbar_center_block]])
+
+        for i in range(self.height-2):
+            data.append([[self.fg, self.bg, self.boxtype.scrollbar_center_block]])
+        
+        if (bottom_y % 1) < 0.5:
+            data.append([[self.fg, self.bg, self.boxtype.scrollbar_top_block]])
+        else:
+            data.append([[self.fg, self.bg, self.boxtype.scrollbar_center_block]])
+        
+        self._data = data
