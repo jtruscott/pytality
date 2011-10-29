@@ -151,7 +151,7 @@ class Buffer(object):
             raise ValueError("Buffer data must be a list (not a %r)" % type(self._data))
 
         if len(self._data) < self.height:
-            raise ValueError("Buffer data has %r rows, but a specified height of %r" % (len(rows), self.height))
+            raise ValueError("Buffer data has %r rows, but a specified height of %r" % (len(self._data), self.height))
 
         for row in self._data:
             if not isinstance(row, collections.MutableSequence):
@@ -160,7 +160,7 @@ class Buffer(object):
                 raise ValueError("Buffer data row has %r cells, but a specified width of %r" % (len(row), self.width))
             
             for cell in row:
-                if not isinstance(row, collections.MutableSequence):
+                if not isinstance(cell, collections.MutableSequence):
                     raise ValueError("Buffer data cells must be lists (not a %r)" % type(cell))
                 if len(cell) < 3:
                     raise ValueError("Buffer data cells must have 3 items (fg, bg, char), not %r" % (len(cell)))

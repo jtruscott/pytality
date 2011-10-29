@@ -293,7 +293,7 @@ class Console:
         current_width = csbi.size.x
         current_height = csbi.size.y
         log.debug("set_size: current_width = %r, current_height = %r", current_width, current_height)
-        if current_width >= width or current_height >= height:
+        if current_width > width or current_height > height:
             #first, we're gonna need a smaller window
             ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, width-1, height-1))
             if not ret:

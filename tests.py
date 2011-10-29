@@ -22,8 +22,10 @@ class PytalityCase(unittest.TestCase):
     #unittest core
     def setUp(self):
         term.init(width=self.width, height=self.height)
+        term.clear()
 
     def tearDown(self):
+        term.move_cursor(x=0, y=max(0, self.height-8))
         term.reset()
 
     #helpers
@@ -87,6 +89,86 @@ class Term(PytalityCase):
         term.resize(120, 59)
         term.resize(120, 61)
         term.resize(self.width, self.height)
+
+    def test_not_setup(self):
+        _impl = term.impl
+        try:
+            term.impl = None
+            term.reset()
+        finally:
+            term.impl = _impl
+    
+    def test_set_title(self):
+        term.set_title("abcdefg")
+        #how would I check this?
+
+    def test_set_cursor_type(self):
+        for val in ("blank", "normal", "block", 0, 1, 2, "normal"):
+            term.set_cursor_type(val)
+            #how would I check this?
+
+    def test_get_at(self):
+        self.assertRaises(ValueError, term.get_at, x=-1, y=-1)
+        self.assertRaises(ValueError, term.get_at, x=self.width, y=self.height)
+        
+    def test_getkey(self):
+        raw_getkey = term.impl.raw_getkey
+        def gk(*rets):
+            #all of the yuck
+            i = [0]
+            def mock():
+                if i[0] == len(rets):
+                    return
+                r = rets[i[0]]
+                i[0] = i[0] + 1
+                return r
+
+            term.impl.raw_getkey = mock
+        try:
+            gk('a'); self.assertEqual(term.getkey(), 'a')
+            gk('C'); self.assertEqual(term.getkey(), 'C')
+            gk('pgdn'); self.assertEqual(term.getkey(), 'pgdn')
+            gk(None, 'b'); self.assertEqual(term.getkey(), 'b')
+
+            gk('\x01'); self.assertEqual(term.getkey(), 'ctrl-a')
+            gk('\x03'); self.assertRaises(KeyboardInterrupt, term.getkey)
+        finally:
+            term.impl.getkey = raw_getkey
+
+
+class Buffer(PytalityCase):
+    def test_invalid_data(self):
+        self.assertRaises(ValueError, buffer.Buffer, width=1, height=1, data=0)
+        self.assertRaises(ValueError, buffer.Buffer, width=1, height=1, data=[])
+        self.assertRaises(ValueError, buffer.Buffer, width=1, height=1, data=[0])
+        self.assertRaises(ValueError, buffer.Buffer, width=1, height=1, data=[[]])
+        self.assertRaises(ValueError, buffer.Buffer, width=1, height=1, data=[[0]])
+        self.assertRaises(ValueError, buffer.Buffer, width=1, height=1, data=[[['a', 'b']]])
+        self.assertTrue(buffer.Buffer(width=1, height=1, data=[[[0, 0, 0]]]))
+
+    def test_oob_blit(self):
+        nullbuff = buffer.Buffer(x=10, y=10, width=0, height=0)
+        nullbuff.draw()
+        
+        whitebox = buffer.Box(x=10, y=10, width=5, height=5,interior_bg=colors.WHITE)
+        redbox = buffer.Box(x=10, y=10, width=5, height=5,interior_bg=colors.RED)
+        bluebox = buffer.Box(x=10, y=10, width=5, height=5,interior_bg=colors.BLUE)
+        self.draw_box(whitebox)
+
+        redbox.x = -1
+        redbox.y = -1
+        redbox.draw()
+        term.flip()
+
+        self.check(0, 0, bg=colors.RED)
+        self.check(self.width-1, self.height-1, bg=colors.BLACK)
+
+        bluebox.x = self.width - 2
+        bluebox.y = self.height - 2
+        bluebox.draw()
+        term.flip()
+        self.check(self.width-2, self.height-2, ch=boxtypes.BoxDouble.tl)
+        self.check(self.width-1, self.height-1, bg=colors.BLUE)
 
 class PlainText(PytalityCase):
     def test_make_text(self):
@@ -165,7 +247,7 @@ class Box(PytalityCase):
             raise
     
     def test_set_at(self):
-        box = buffer.Box(x=20, y=20, width=6, height=6)
+        box = buffer.Box(x=10, y=10, width=6, height=6)
         self.draw_box(box)
         log.debug(pprint.pformat(box._data))
         box.set_at(2, 2, '0', colors.LIGHTGREY)

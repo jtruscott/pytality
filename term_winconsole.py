@@ -161,10 +161,16 @@ def draw_buffer(source, start_x, start_y):
     #render the buffer to our backing
     y = start_y
     for row in source._data:
+        if y < 0:
+            y += 1
+            continue
         if y >= backing.height:
             break
         x = start_x
         for fg, bg, ch in row[:source.width]:
+            if x < 0:
+                x += 1
+                continue
             if x >= backing.width:
                 break
             #log.debug("x=%r y=%r, fg=%r bg=%r ch=%r", x, y, fg, bg, ch)
@@ -184,6 +190,8 @@ def draw_buffer(source, start_x, start_y):
     return
 
 def get_at(x, y):
+    if x < 0 or x >= backing.width or y < 0 or y >= backing.height:
+        raise ValueError("get_at: Invalid coordinate (%r, %r)" % (x,y))
     coord = backing.buffer[(y*backing.width) + x]
     ch = coord.ascii
     fg = coord.attr & 0xF
