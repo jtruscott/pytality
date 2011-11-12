@@ -40,6 +40,7 @@ class PytalityCase(unittest.TestCase):
                 self.assertTrue(tch in ['\x00', ' '], "%r is not a blank space" % tch)
             else:
                 self.assertEqual(ch, tch, msg="Got %r '%s' instead of %r '%s'" % (tch, tch, ch, ch))
+        return
         if fg is not None:
             self.assertEqual(fg, tfg)
         if bg is not None:
@@ -73,6 +74,14 @@ class PytalityCase(unittest.TestCase):
 
 
 class Term(PytalityCase):
+    def test_getch(self):
+        x = 0; y = 0
+        for bgcolor in (colors.BLACK, colors.GREEN, colors.RED):
+            for fgcolor in (colors.BLACK, colors.DARKGREY, colors.LIGHTGREY, colors.WHITE, colors.RED, colors.LIGHTRED):
+                x += 1; y += 1
+                p = buffer.Buffer(width=1, height=1, x=x, y=y, data=[[[fgcolor, bgcolor, 'Q']]]); p.draw(); term.flip();
+                log.debug("bg: %r (%r, fg: %r (%r)", bgcolor, bin(bgcolor[1]), fgcolor, bin(fgcolor[1]))
+                self.check(x=x, y=y, fg=fgcolor, bg=bgcolor, ch='Q')
     #tests
     def test_clear(self):
         term.clear()

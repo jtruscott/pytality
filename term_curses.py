@@ -31,25 +31,45 @@ class colors:
     YELLOW = (curses.COLOR_YELLOW, True)
     WHITE = (curses.COLOR_WHITE, True)
 
+all_colors = (colors.BLACK, colors.BLUE, colors.GREEN, colors.CYAN, colors.RED, colors.MAGENTA, colors.BROWN, colors.LIGHTGREY,
+              colors.DARKGREY, colors.LIGHTBLUE, colors.LIGHTCYAN, colors.LIGHTRED, colors.LIGHTMAGENTA, colors.YELLOW, colors.WHITE)
 def init():
     global scr
     scr = curses.initscr()
     curses.start_color()
     scr.keypad(False)
     curses.noecho()
+    #initialize all the color pairings (or else get_at can't find them)
+    for bgcolor in all_colors:
+        if bgcolor[1]:
+            continue
+        for fgcolor in all_colors:
+            get_color(fgcolor, bgcolor)
+
+class Glyph(str):
+    """
+        A string that's already been converted from codepage 437 to unicode.
+    """
+    pass
 
 def uni(c):
     """
         Convert a string from codepage 437 to unicode
     """
+    if isinstance(c, Glyph):
+        return c
     return c.decode('cp437').encode('utf-8')
+
+def convert_glyph(ordinal):
+    return Glyph(uni(chr(ordinal)))
 
 #----------------------------------------------------------------------------
 #Screen functions
 
 def flip():
-    scr.noutrefresh()
-    curses.doupdate()
+    scr.refresh()
+    #scr.noutrefresh()
+    #curses.doupdate()
 
 def clear():
     scr.erase()
@@ -85,10 +105,11 @@ def set_title(title):
     #gibberish, i tell you
     sys.stdout.write("\x1b]2;%s\x07" % title)
 
-def setcursortype(i):
+def set_cursor_type(i):
     curses.curs_set(i)
 
 color_pairs = {}
+pair_values = {0: (curses.COLOR_BLACK, curses.COLOR_BLACK)}
 next_pair = 0
 def get_color(fg, bg):
     '''
@@ -99,26 +120,34 @@ def get_color(fg, bg):
     fg, bold = fg
     bg, _ = bg #backgrounds can't be bold
 
-    if (fg, bg, bold) not in color_pairs:
+    if (fg, bg) not in color_pairs:
         next_pair += 1
         #log.debug("creating pair %i: (%r, %r)", next_pair, fg, bg)
 
-
         curses.init_pair(next_pair, fg, bg)
         color_pair = curses.color_pair(next_pair)
-        if bold:
-            color_pair |= curses.A_BOLD
-        
-        color_pairs[(fg, bg, bold)] = color_pair
+        color_pairs[(fg, bg)] = color_pair
+        pair_values[color_pair] = (fg, bg)
 
-    return color_pairs[(fg, bg, bold)]
+    else:
+        color_pair = color_pairs[(fg, bg)]
+    if bold:
+        color_pair |= curses.A_BOLD
+        
+    return color_pair
     
 def draw_buffer(source, start_x, start_y):
     global MAX_X, MAX_Y
     y = start_y
     for row in source._data:
+        if y < 0:
+            y += 1
+            continue
         x = start_x
         for fg, bg, ch in row[:source.width]:
+            if x < 0:
+                x += 1
+                continue
             color = get_color(fg, bg)
             ch = uni(ch)
             #log.debug("x: %r y: %r ch: %r, w: %r h: %r", x, y, ch, buf.width, buf.height)
@@ -136,19 +165,50 @@ def draw_buffer(source, start_x, start_y):
     return
 
 def get_at(x, y):
+    log.debug("x: %r, y: %r", x, y)
+    if x < 0 or x >= MAX_X or y < 0 or y >= MAX_Y:
+        raise ValueError("get_at: Invalid coordinate (%r, %r)" % (x,y))
     data = scr.inch(y, x)
     #inch returns attr in the high bits, char in the low bits
-    ch = data & 0xFF
-    attr = data & 0xFFFF00
+    log.debug("inch: %r %r", bin(data), data)
+    #instr can return multiple characters if unicode is going on, so we get to parse utf8 manually! OH BOY!
+    chars = scr.instr(y, x, 4)
+    log.debug("instr4: %r", chars)
+    #in utf8, a leading 1 means multibyte, 110 = total two bytes, 1110 = total three, 11110 = total four
+    if not ord(chars[0]) & 0x80:
+        ch = chars[0]
+    elif (ord(chars[0]) & 0xE0) == 0xC0:
+        ch = chars[0:2]
+    elif (ord(chars[0]) & 0xF0) == 0xE0:
+        ch = chars[0:3]
+    else:
+        ch = chars
+    log.debug('ch: %r', ch)
+    color_data = (data & curses.A_COLOR)
+    #log.debug('color_data: %r %r', bin(color_data), color_data)
+    bold = data & curses.A_BOLD
+    #log.debug('bold: %r', bold)
+    #bg = (color_data >> 8) & 0xF
+    #fg = (color_data >> (8+4)) & 0xF
 
     #and attr can be backwards lookedup and turned into a color set
-    key_index = color_pairs.values().index(attr)
-    cfg, cbg, cbold = color_pairs.keys()[key_index]
+    #pairno = curses.pair_number(color_data)
+    #cpv = color_pairs.values()
+    #if attr in cpv:
+    #key_index = cpv.index(pairno)
+    #else:
+    #    raise ValueError("cant find %r in %r" % (attr, cpv))
+    #log.debug(pair_values)
+    fg, bg = pair_values[color_data]
     #that can turn into a color in our world
-    fg = (cfg, cbold)
-    bg = (cbg, False)
+    fg = (fg, bool(bold))
+    bg = (bg, False)
+    log.debug('bg: %r, fg: %r', bg, fg)
 
     return [fg, bg, ch]
+
+def move_cursor(x, y):
+    scr.move(y, x)
 
 #--------------------------------------
 #Input functions
