@@ -4,4 +4,5 @@ build
 dist
 *.komodoproject
 .coverage
+.coverage.*
 htmlcov
