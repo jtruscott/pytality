@@ -124,6 +124,9 @@ def init(use_cp437=True):
     reset()
     C.set_cursor_type(0)
 
+def convert_glyph(ordinal):
+    return chr(ordinal)
+
 #----------------------------------------------------------------------------
 #Actual functions
 
