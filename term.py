@@ -12,10 +12,20 @@ def _find_impl():
     """
     Find a suitable terminal implementation.
     """
-    choices = ['silverlight', 'winconsole', 'curses']
+    choices = ['pygame', 'silverlight', 'winconsole', 'curses']
     
     success = False
     for choice in choices:
+        if choice == 'pygame':
+            try:
+                import term_pygame as _impl
+                log.debug("Imported term_pygame successfully")
+                success = True
+                break
+            except ImportError, e:
+                log.debug("Could not import term_pygame: %r", e)
+                continue
+        
         if choice == 'silverlight' and sys.platform == 'silverlight':
             import term_silverlight as _impl
             log.debug("Imported term_silverlight successfully")

@@ -32,9 +32,12 @@ class colors:
     YELLOW = 14
     WHITE = 15
 
+def convert_glyph(ordinal):
+    return chr(ordinal)
+
 cell_changes = []
 
-def init(self, *args, **kwargs):
+def init(*args, **kwargs):
     window.set_message.InvokeSelf("Initializing Terminal...")
     clear()
     window.setup_input_handler.InvokeSelf()
@@ -63,6 +66,12 @@ def reset(*args, **kwargs):
 def set_title(title, *args, **kwargs):
     window.set_title.InvokeSelf(title)
 
+def move_cursor(*args, **kwargs):
+    """
+        TODO: not relevant until we show cursors
+    """
+    return
+
 def set_cursor_type(*args, **kwargs):
     """
         TODO: overlay a blinky cursor when this is enabled.
@@ -70,15 +79,23 @@ def set_cursor_type(*args, **kwargs):
     return
 
 def draw_buffer(source, start_x, start_y):
-    #log.debug("drawing a w=%r, h=%r buffer at x=%r, y=%r", source.width, source.height, start_x, start_y)
-    #log.debug("firstfour: %r", source._data[0][:4])
     #render the buffer to our backing
     y = start_y
     for row in source._data:
+        if y < 0:
+            y += 1
+            continue
+        if y >= max_y:
+            break
+
         x = start_x
         for fg, bg, ch in row[:source.width]:
-            if x >= max_x or y >= max_y:
+            if x < 0:
+                x += 1
+                continue
+            if x >= max_x:
                 break
+
             current = cell_info[y][x]
             new = [bg, fg, ord(ch)]
             if current != new:
@@ -101,6 +118,12 @@ def flip():
 
     window.flip_cells.InvokeSelf()
     cell_changes = []
+
+def get_at(x, y):
+    if x < 0 or x >= max_x or y < 0 or y >= max_y:
+        raise ValueError("get_at: Invalid coordinate (%r, %r)" % (x,y))
+    bg, fg, ch = cell_info[y][x]
+    return [fg, bg, chr(ch)]
 
 def raw_getkey():
     while True:

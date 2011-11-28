@@ -5,3 +5,7 @@ exclude_lines =
     raise NotImplementedError
     raise WinError
     if __name__ == .__main__.:
+[paths]
+source =
+    c:\pyweek13\pytality\
+    /root/pytality
