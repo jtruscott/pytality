@@ -16,6 +16,7 @@ Supported Platforms
 * windows (using ctypes wrappers to the Win32 APIs)
 * linux/mac (using curses)
 * inside the browser (via IronPython + Silverlight/Moonlight)
+* windows/linux/mac (using pygame)
 
 Requirements
 ------------
@@ -25,3 +26,24 @@ Requirements
 Installation
 ------------
 Just put the 'pytality' package in your python path. If you're writing something using Pytality, don't hesistate to include the folder with your game directly.
+
+Usage
+-----
+
+Import Pytality and initialize the terminal:
+
+    import pytality
+    pytality.term.init()
+
+Make a rectangular box:
+
+    box = pytality.buffer.Box(x=1, y=2, width=10, height=20)
+
+Draw it and flip the screen:
+
+    box.draw()
+    pytality.term.flip()
+
+Finally, tear down the terminal.
+
+    pytality.term.reset()
