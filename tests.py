@@ -123,6 +123,24 @@ class Term(PytalityCase):
             term.set_cursor_type(val)
             #how would I check this?
 
+    def test_blink_timing(self):
+        import time
+        term.set_cursor_type(1)
+        term.move_cursor(1, 1)
+        t = buffer.PlainText("Time!", x=0, y=0)
+        t.draw()
+
+        start = time.time()
+        while time.time() - start < 2:
+            term.flip()
+        
+        t.set("Keys!")
+        t.draw()
+        term.flip()
+        for i in range(10):
+            term.getkey()
+
+
     def test_get_at(self):
         self.assertRaises(ValueError, term.get_at, x=-1, y=-1)
         self.assertRaises(ValueError, term.get_at, x=self.width, y=self.height)

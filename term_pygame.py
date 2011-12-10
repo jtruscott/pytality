@@ -1,5 +1,6 @@
 import os
 import pygame
+import threading, time
 from pygame.locals import *
 
 import logging
@@ -52,6 +53,25 @@ sprites = {}
 #have we quit?
 quit = False
 
+#blinky cursor stuff
+cursor_thread = None
+replaced_character = None
+cursor_x = 0
+cursor_y = 0
+cursor_type = None
+
+class CursorThread(threading.Thread):
+    quit = False
+    def run(self):
+        blink = True
+        while not self.quit:
+            blink = not blink
+            try:
+                pygame.event.post(pygame.event.Event(USEREVENT, blink=blink))
+            except pygame.error:
+                return
+            time.sleep(0.5)
+
 def init(use_cp437=True):
     pygame.init()
     
@@ -70,6 +90,18 @@ def init(use_cp437=True):
     global quit
     quit = False
 
+    #spawn a blinky-cursor manager
+    global cursor_thread, replaced_character, cursor_x, cursor_y, cursor_type
+    
+    cursor_x = 0
+    cursor_y = 0
+    replaced_character = None
+    cursor_type = None
+
+    cursor_thread = CursorThread()
+    cursor_thread.daemon = True
+    cursor_thread.start()
+
 def load_sprites():
     if 'bg' in sprites:
         #we only need to load once
@@ -83,6 +115,34 @@ def load_sprites():
     load_image('bg', 'colors.png')
     for color_id in range(16):
         load_image(color_id, 'char', '%s.png' % color_id)
+
+
+def blink_cursor(event):
+    global replaced_character
+    if event.blink:
+        replace_character()
+    else:
+        restore_character()
+
+def replace_character():
+    global replaced_character
+    if not cursor_type:
+        return
+
+    fg, bg, ch = get_at(cursor_x, cursor_y)
+    replaced_character = (cursor_x, cursor_y, fg, bg, ch)
+
+    blit_at(cursor_x, cursor_y, 7, bg, cursor_type)
+    pygame.display.flip()
+
+def restore_character():
+    global replaced_character
+    if not replaced_character:
+        return
+    x, y, fg, bg, ch = replaced_character
+    blit_at(x, y, fg, bg, ch)
+    pygame.display.flip()
+    replaced_character = None
 
 #----------------------------------------------------------------------------
 #Actual functions
@@ -101,6 +161,8 @@ def flip():
     ]):
         if event.type == QUIT:
             raise KeyboardInterrupt()
+        elif event.type == USEREVENT:
+            blink_cursor(event)
         else:
             #we don't actually care
             pass
@@ -142,18 +204,48 @@ def reset():
     pygame.display.quit()
     global quit
     quit = True
+    cursor_thread.quit = True
+    cursor_thread.join()
 
 def move_cursor(x, y):
-    #todo
-    pass
+    global cursor_x, cursor_y
+    restore_character()
+    cursor_x = x
+    cursor_y = y
 
 def set_title(title):
     pygame.display.set_caption(title)
 
 def set_cursor_type(i):
-    #todo
-    pass
+    global cursor_type
+    cursor_map = {
+        0: None,
+        1: '_',
+        2: chr(0xDB)
+    }
+    restore_character()
+    cursor_type = cursor_map[i]
 
+def blit_at(x, y, fg, bg, ch):
+    bg_sprite = sprites['bg']
+    fg_sprite = sprites[fg]
+    index = ord(ch)
+
+    #coordinates on the screen
+    screen_x = x * W
+    screen_y = y * H
+
+    #coordinates on the bg sprite map
+    bg_x = bg * W
+
+    #coordinates on the fg sprite map
+    fg_x = (index % 16) * W
+    fg_y = int(index / 16) * H
+
+    #blit the background and foreground to the screen
+    screen.blit(bg_sprite, dest=(screen_x, screen_y), area=pygame.Rect(bg_x, 0, W, H))
+    screen.blit(fg_sprite, dest=(screen_x, screen_y), area=pygame.Rect(fg_x, fg_y, W, H))
+   
 def draw_buffer(source, start_x, start_y):
     #log.debug("drawing a w=%r, h=%r buffer at x=%r, y=%r", source.width, source.height, start_x, start_y)
     #log.debug("firstfour: %r", source._data[0][:4])
@@ -164,7 +256,6 @@ def draw_buffer(source, start_x, start_y):
     
     #lookups we can cache
     width, height = max_x, max_y
-    bg_sprite = sprites['bg']
 
     for row in source._data:
         if y < 0:
@@ -180,24 +271,7 @@ def draw_buffer(source, start_x, start_y):
             if x >= width:
                 break
 
-            fg_sprite = sprites[fg]
-            index = ord(ch)
-
-            #coordinates on the screen
-            screen_x = x * W
-            screen_y = y * H
-
-            #coordinates on the bg sprite map
-            bg_x = bg * W
-
-            #coordinates on the fg sprite map
-            fg_x = (index % 16) * W
-            fg_y = int(index / 16) * H
-
-            #blit the background and foreground to the screen
-            screen.blit(bg_sprite, dest=(screen_x, screen_y), area=pygame.Rect(bg_x, 0, W, H))
-            screen.blit(fg_sprite, dest=(screen_x, screen_y), area=pygame.Rect(fg_x, fg_y, W, H))
-
+            blit_at(x, y, fg, bg, ch)
             #remember the info for get_at
             cell_data[y][x] = [fg, bg, ch]
             
@@ -254,7 +328,9 @@ def prepare_raw_getkey():
                     ignored_items = []
                     while True:
                         item = pygame.event.wait()
-                        if item.type != KEYDOWN:
+                        if item.type == USEREVENT:
+                            blink_cursor(item)
+                        elif item.type != KEYDOWN:
                             ignored_items.append(item)
                         else:
                             items.append(item)
