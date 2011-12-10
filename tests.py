@@ -17,11 +17,15 @@ class SPACE:
     pass
 
 class PytalityCase(unittest.TestCase):
+    force_backend = None
     width = 80
     height = 50
     #unittest core
     def setUp(self):
-        term.init(width=self.width, height=self.height)
+        if self.force_backend:
+            term.init(backends=[self.force_backend], width=self.width, height=self.height)
+        else:
+            term.init(width=self.width, height=self.height)
         term.clear()
 
     def tearDown(self):
@@ -381,4 +385,8 @@ class MessageBox(PytalityCase):
         self.check(r, b, bt.scrollbar_bottom)
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] in ['silverlight', 'pygame', 'winconsole', 'curses']:
+        PytalityCase.force_backend = sys.argv.pop(1)
+
     unittest.main()
