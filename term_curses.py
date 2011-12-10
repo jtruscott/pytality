@@ -3,36 +3,53 @@ import curses
 import locale
 
 import logging
+import ansi
 log = logging.getLogger('pytality.term.curses')
     
 #Curses requires this fairly magical invocation to support unicode correctly
 locale.setlocale(locale.LC_ALL,"")
 
-class colors:
-    """
-    Constants for the sixteen ANSI colors.
-    On Curses, these are 2-tuples of (color, bold)
-    """
-    BLACK = (curses.COLOR_BLACK, False)
-    BLUE = (curses.COLOR_BLUE, False)
-    GREEN = (curses.COLOR_GREEN, False)
-    CYAN = (curses.COLOR_CYAN, False)
-    RED = (curses.COLOR_RED, False)
-    MAGENTA = (curses.COLOR_MAGENTA, False)
-    BROWN = (curses.COLOR_YELLOW, False)
-    LIGHTGRAY = LIGHTGREY = (curses.COLOR_WHITE, False)
+        BLACK = 0
+    BLUE = 1
+    GREEN = 2
+    CYAN = 3
+    RED = 4
+    MAGENTA = 5
+    BROWN = 6
+    LIGHTGRAY = LIGHTGREY = 7
+    DARKGRAY = DARKGREY = 8
+    LIGHTBLUE = 9
+    LIGHTGREEN = 10
+    LIGHTCYAN = 11
+    LIGHTRED = 12
+    LIGHTMAGENTA = 13
+    YELLOW = 14
+    WHITE = 15
 
-    DARKGRAY = DARKGREY = (curses.COLOR_BLACK, True)
-    LIGHTBLUE = (curses.COLOR_BLUE, True)
-    LIGHTGREEN = (curses.COLOR_GREEN, True)
-    LIGHTCYAN = (curses.COLOR_CYAN, True)
-    LIGHTRED = (curses.COLOR_RED, True)
-    LIGHTMAGENTA = (curses.COLOR_MAGENTA, True)
-    YELLOW = (curses.COLOR_YELLOW, True)
-    WHITE = (curses.COLOR_WHITE, True)
+"""
+Conversions for the sixteen ANSI colors.
+With curses, we treat these as 2-tuples of (color, bold)
+"""
+color_map = {
+    0: (curses.COLOR_BLACK, False)
+    1: (curses.COLOR_BLUE, False)
+    2: (curses.COLOR_GREEN, False)
+    3: (curses.COLOR_CYAN, False)
+    4: (curses.COLOR_RED, False)
+    5: (curses.COLOR_MAGENTA, False)
+    6: (curses.COLOR_YELLOW, False)
+    7: (curses.COLOR_WHITE, False)
 
-all_colors = (colors.BLACK, colors.BLUE, colors.GREEN, colors.CYAN, colors.RED, colors.MAGENTA, colors.BROWN, colors.LIGHTGREY,
-              colors.DARKGREY, colors.LIGHTBLUE, colors.LIGHTCYAN, colors.LIGHTRED, colors.LIGHTMAGENTA, colors.YELLOW, colors.WHITE)
+    8: (curses.COLOR_BLACK, True)
+    9: (curses.COLOR_BLUE, True)
+    10: (curses.COLOR_GREEN, True)
+    11: (curses.COLOR_CYAN, True)
+    12: (curses.COLOR_RED, True)
+    13: (curses.COLOR_MAGENTA, True)
+    14: (curses.COLOR_YELLOW, True)
+    15: (curses.COLOR_WHITE, True)
+}
+
 def init():
     global scr
     scr = curses.initscr()
@@ -48,14 +65,12 @@ class Glyph(str):
 
 def uni(c):
     """
-        Convert a string from codepage 437 to unicode
+        Convert a string from codepage 437 to unicode.
+        We use Glyph shenanigans to not convert twice.
     """
     if isinstance(c, Glyph):
         return c
-    return c.decode('cp437').encode('utf-8')
-
-def convert_glyph(ordinal):
-    return Glyph(uni(chr(ordinal)))
+    return Glyph(c.decode('cp437').encode('utf-8'))
 
 #----------------------------------------------------------------------------
 #Screen functions
@@ -110,8 +125,9 @@ def get_color(fg, bg):
         so we have to translate each combination into one.
     '''
     global next_pair
-    fg, bold = fg
-    bg, _ = bg #backgrounds can't be bold
+    #convert the color IDs to curses colors
+    fg, bold = color_map[fg]
+    bg, _ = color_map[bg] #backgrounds can't be bold
 
     if (fg, bg) not in color_pairs:
         next_pair += 1
@@ -191,8 +207,6 @@ def move_cursor(x, y):
 #--------------------------------------
 #Input functions
 
-_ansi = None #we have a circular reference with the 'ansi' module due to our colors
-
 class KeyReader:
     """
         The fakest file-like object you ever did see.
@@ -203,10 +217,6 @@ class KeyReader:
         return key
     
 def raw_getkey():
-    global _ansi
-    if not _ansi:
-        import ansi
-        _ansi = ansi
 
     key = scr.getkey()
     log.debug("key is %r", key)
@@ -214,7 +224,7 @@ def raw_getkey():
         return 'enter'
     elif key == '\x1b':
         #ansi escape sequence, otherwise known as "ah crap"
-        esc = _ansi.parse_escape(KeyReader(), is_key=True)
+        esc = ansi.parse_escape(KeyReader(), is_key=True)
         if esc.is_key:
             return esc.meaning
             log.warn("Unknown ansi key!: %r", esc.meaning)

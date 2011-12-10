@@ -9,32 +9,6 @@ import time
 import logging
 log = logging.getLogger('pytality.term.silverlight')
 
-class colors:
-    """
-    Constants for the sixteen ANSI colors.
-    On Silverlight, we treat these as simple ints.
-    (The browser does the hard work.)
-    """
-    BLACK = 0
-    BLUE = 1
-    GREEN = 2
-    CYAN = 3
-    RED = 4
-    MAGENTA = 5
-    BROWN = 6
-    LIGHTGRAY = LIGHTGREY = 7
-    DARKGRAY = DARKGREY = 8
-    LIGHTBLUE = 9
-    LIGHTGREEN = 10
-    LIGHTCYAN = 11
-    LIGHTRED = 12
-    LIGHTMAGENTA = 13
-    YELLOW = 14
-    WHITE = 15
-
-def convert_glyph(ordinal):
-    return chr(ordinal)
-
 cell_changes = []
 
 def init(*args, **kwargs):

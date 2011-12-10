@@ -8,12 +8,11 @@ log = logging.getLogger('pytality.term')
 #-----------------------------------------------------------------------------
 # Terminal setup/teardown
 
-def _find_impl():
+def _find_impl(choices):
     """
     Find a suitable terminal implementation.
     """
-    choices = ['pygame', 'silverlight', 'winconsole', 'curses']
-    
+
     success = False
     for choice in choices:
         if choice == 'pygame':
@@ -55,25 +54,67 @@ def _find_impl():
     return _impl
 
 #Our global terminal implementation
-impl = _find_impl()
-colors = impl.colors
+impl = None
 
-def init(width=80, height=24):
+class colors:
+    """
+    Constants for the sixteen ANSI colors.
+    
+    Note that background colors on some backends (curses) cannot be set as "bright".
+    """
+    BLACK = 0
+    BLUE = 1
+    GREEN = 2
+    CYAN = 3
+    RED = 4
+    MAGENTA = 5
+    BROWN = 6
+    LIGHTGRAY = LIGHTGREY = 7
+    DARKGRAY = DARKGREY = 8
+    LIGHTBLUE = 9
+    LIGHTGREEN = 10
+    LIGHTCYAN = 11
+    LIGHTRED = 12
+    LIGHTMAGENTA = 13
+    YELLOW = 14
+    WHITE = 15
+
+def init(**kwargs):
     """
     Initialize the terminal and check that it's of an appropriate size.
     Also disables the cursor image to avoid flickery drawings. Use set_cursor_state
     to re-enable it when prompting for input.
 
-    width:
-    height:
-        Minimum dimensions of the screen.
-        Note that on linux, a 1-row/column margin is added on the edge
-        to prevent spurious failures.
+    config:
+        a dictionary of configuration options for Pytality.
+        Supports the following keys:
+        backends:
+            A list of backends to try, in order.
+            Defaults to ['silverlight', 'winconsole', 'pygame', 'curses']
+
+        width:
+        height:
+            Minimum dimensions of the screen.
+            Note that when using curses, a 1-row/column margin is added on the edge to prevent spurious failures.
+            Defaults to 80 wide by 24 tall.
+
     """
+    global impl, colors
     log.debug("init(): initializing terminal")
 
+    default_config = dict(
+        backends = ['silverlight', 'winconsole', 'pygame', 'curses'],
+        width = 80,
+        height = 24,
+    )
+    if kwargs:
+        default_config.update(kwargs)
+    config = default_config
+
+    impl = _find_impl(config['backends'])
+
     impl.init()
-    resize(width, height)
+    resize(config['width'], config['height'])
 
 def reset():
     """

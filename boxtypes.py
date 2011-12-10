@@ -1,8 +1,5 @@
 __all__ = ['BoxType', 'BoxDouble', 'BoxSingle']
 
-import term
-glyph = term.impl.convert_glyph
-
 class BoxType(object):
     """
     A class containing the various line-drawing characters used in
@@ -20,37 +17,37 @@ class BoxType(object):
     scrollbar_bottom = ' '
     scrollbar_center = ' '
 
-    scrollbar_center_block = glyph(0xDB)
-    scrollbar_bottom_block = glyph(0xDC)
-    scrollbar_top_block = glyph(0xDF)
+    scrollbar_center_block = chr(0xDB)
+    scrollbar_bottom_block = chr(0xDC)
+    scrollbar_top_block = chr(0xDF)
 
 class BoxDouble(BoxType):
     """
     A box bordered with double-line drawing characters.
     """
     blank = ' '
-    horiz = glyph(0xCD)
-    vert = glyph(0xBA)
-    tl = glyph(0xC9)
-    bl = glyph(0xC8)
-    tr = glyph(0xBB)
-    br = glyph(0xBC)
+    horiz = chr(0xCD)
+    vert = chr(0xBA)
+    tl = chr(0xC9)
+    bl = chr(0xC8)
+    tr = chr(0xBB)
+    br = chr(0xBC)
 
-    scrollbar_top = glyph(0xD2)
-    scrollbar_bottom = glyph(0xD0)
-    scrollbar_center = glyph(0xF0)
+    scrollbar_top = chr(0xD2)
+    scrollbar_bottom = chr(0xD0)
+    scrollbar_center = chr(0xF0)
 
 class BoxSingle(BoxType):
     """
     A box bordered with single-line drawing characters.
     """
-    horiz = glyph(0xC4)
-    vert = glyph(0xB3)
-    tl = glyph(0xDA)
-    bl = glyph(0xC0)
-    tr = glyph(0xBF)
-    br = glyph(0xD9)
+    horiz = chr(0xC4)
+    vert = chr(0xB3)
+    tl = chr(0xDA)
+    bl = chr(0xC0)
+    tr = chr(0xBF)
+    br = chr(0xD9)
 
-    scrollbar_top = glyph(0xD1)
-    scrollbar_bottom = glyph(0xCF)
-    scrollbar_center = glyph(0xD8)
+    scrollbar_top = chr(0xD1)
+    scrollbar_bottom = chr(0xCF)
+    scrollbar_center = chr(0xD8)

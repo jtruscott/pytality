@@ -7,28 +7,6 @@ log = logging.getLogger('pytality.term.pygame')
 
 log.debug("pygame version: %r", pygame.version.ver)
 
-class colors:
-    """
-    Constants for the sixteen ANSI colors.
-    For pygame, these are simple ints that map to which file to blit
-    """
-    BLACK = 0
-    BLUE = 1
-    GREEN = 2
-    CYAN = 3
-    RED = 4
-    MAGENTA = 5
-    BROWN = 6
-    LIGHTGRAY = LIGHTGREY = 7
-    DARKGRAY = DARKGREY = 8
-    LIGHTBLUE = 9
-    LIGHTGREEN = 10
-    LIGHTCYAN = 11
-    LIGHTRED = 12
-    LIGHTMAGENTA = 13
-    YELLOW = 14
-    WHITE = 15
-
 """
     A mapping of special keycodes into representative strings.
     Based off the keymap in WConio, but with 'alt', 'ctrl', and 'shift'
@@ -89,8 +67,8 @@ def init(use_cp437=True):
     #prepare the raw_getkey generator
     prepare_raw_getkey()
 
-def convert_glyph(ordinal):
-    return chr(ordinal)
+    global quit
+    quit = False
 
 def load_sprites():
     if 'bg' in sprites:
@@ -140,9 +118,9 @@ def clear():
     cell_data = [
         [
             [0, 0, ' ']
-            for cell in range(screen.get_width()/W)
+            for cell in range(max_x)
         ]
-        for row in range(screen.get_height()/H)
+        for row in range(max_y)
     ]
 
 def resize(width, height):
