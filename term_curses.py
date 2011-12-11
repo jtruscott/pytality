@@ -14,23 +14,23 @@ Conversions for the sixteen ANSI colors.
 With curses, we treat these as 2-tuples of (color, bold)
 """
 color_map = {
-    0: (curses.COLOR_BLACK, False)
-    1: (curses.COLOR_BLUE, False)
-    2: (curses.COLOR_GREEN, False)
-    3: (curses.COLOR_CYAN, False)
-    4: (curses.COLOR_RED, False)
-    5: (curses.COLOR_MAGENTA, False)
-    6: (curses.COLOR_YELLOW, False)
-    7: (curses.COLOR_WHITE, False)
+    0: (curses.COLOR_BLACK, False),
+    1: (curses.COLOR_BLUE, False),
+    2: (curses.COLOR_GREEN, False),
+    3: (curses.COLOR_CYAN, False),
+    4: (curses.COLOR_RED, False),
+    5: (curses.COLOR_MAGENTA, False),
+    6: (curses.COLOR_YELLOW, False),
+    7: (curses.COLOR_WHITE, False),
 
-    8: (curses.COLOR_BLACK, True)
-    9: (curses.COLOR_BLUE, True)
-    10: (curses.COLOR_GREEN, True)
-    11: (curses.COLOR_CYAN, True)
-    12: (curses.COLOR_RED, True)
-    13: (curses.COLOR_MAGENTA, True)
-    14: (curses.COLOR_YELLOW, True)
-    15: (curses.COLOR_WHITE, True)
+    8: (curses.COLOR_BLACK, True),
+    9: (curses.COLOR_BLUE, True),
+    10: (curses.COLOR_GREEN, True),
+    11: (curses.COLOR_CYAN, True),
+    12: (curses.COLOR_RED, True),
+    13: (curses.COLOR_MAGENTA, True),
+    14: (curses.COLOR_YELLOW, True),
+    15: (curses.COLOR_WHITE, True),
 }
 
 def init():
