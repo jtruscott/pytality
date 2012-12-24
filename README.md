@@ -22,7 +22,9 @@ Supported Platforms
 Requirements
 ------------
 * Python 2.6+
-* Nothing else!
+* Additional requirements depend on what backends you wish to use:
+    * Pygame requres Pygame, of course
+    * Curses requires curses, naturally
     
 Installation
 ------------
@@ -48,3 +50,26 @@ Draw it and flip the screen:
 Finally, tear down the terminal.
 
     pytality.term.reset()
+    
+Stability
+---------
+Pytality was written to be lightweight and has a decent array of unit tests.
+Most of the API functions have reasonably thorough docstrings, as well.
+
+The level of support for the various backends does vary.
+* The winconsole backend is very stable and works quite well.
+    
+    Using it will give you the true console experience.
+* The pygame backend is also very stable, and actually runs significantly faster than winconsole does.
+
+    It's pixel-for-pixel identical to the windows console in output, making it good for cross-platform use.
+
+* The curses backend is, unfortunately, not recommended.
+
+    When using it, you'll quickly find out that different terminal emulators have completely different ideas of what
+    some characters should look like, resulting in all the fun font, margin, and sizing issues typically associated with HTML/CSS work.
+    Additionally, it's not possible to portably resize a curses terminal from inside, leading to "my screen is too small!" bug reports.
+
+* The silverlight backend is as wacky as it sounds. It's a fascinating proof of concept, but I wouldn't rely on it.
+
+You can call `pytality.term.init(backends=["pygame", "winconsole"])` to specify what backends are allowed.
