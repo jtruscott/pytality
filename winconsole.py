@@ -285,33 +285,59 @@ class Console:
         Change the size of the console window.
         This is a little bizarre:
         - SetConsoleScreenBufferSize _cannot_ change to a size
-        smaller than the current window size, but can increase the buffer size
+            smaller than the current window size, but can increase the buffer size
+            From MSDN:
+            A COORD structure that specifies the new size of the console screen buffer, in character rows and columns. 
+            The specified width and height cannot be less than the width and height of the console screen buffer's window. 
+            The specified dimensions also cannot be less than the minimum size allowed by the system. 
 
-        - SetConsoleWindowInfo _cannot_ increase the size of the window, but can decrease the size
+        - SetConsoleWindowInfo _cannot_ increase the size of the window, but can decrease the size.
+            From MSDN:
+            The function fails if the specified window rectangle extends beyond the boundaries of the console screen buffer. 
+            This means that the Top and Left members of the lpConsoleWindow rectangle cannot be less than zero.
+            Similarly, the Bottom and Right members (or the calculated bottom and right coordinates)
+            cannot be greater than (screen buffer height - 1) and (screen buffer width - 1), respectively. 
+
+        If the window is going to grow on one axis and shrink on another, neither call will work directly.
+        as far as I can tell, you have to do one call for the one axis, and the other for the other axis.
         """
         csbi = self._get_screen_info()
         current_width = csbi.size.x
         current_height = csbi.size.y
         log.debug("set_size: current_width = %r, current_height = %r", current_width, current_height)
-        if current_width > width or current_height > height:
+
+        def shrink(new_width, new_height):
             #first, we're gonna need a smaller window
-            ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, width-1, height-1))
-            if not ret:
-                raise WinError()
-            #then, we're gonna need a smaller buffer
-            ret = self.SetConsoleScreenBufferSize(self.output, COORD(width, height))
+            ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, new_width-1, new_height-1))
             if not ret:
                 raise WinError()
 
-        else:
+            #then, we're gonna need a smaller buffer
+            ret = self.SetConsoleScreenBufferSize(self.output, COORD(new_width, new_height))
+            if not ret:
+                raise WinError()
+
+        def grow(new_width, new_height):
             #first, we're gonna need a bigger buffer
-            ret = self.SetConsoleScreenBufferSize(self.output, COORD(width, height))
+            ret = self.SetConsoleScreenBufferSize(self.output, COORD(new_width, new_height))
             if not ret:
                 raise WinError()
+
             #then, we're gonna need a matching window size
-            ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, width-1, height-1))
+            ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, new_width-1, new_height-1))
             if not ret:
                 raise WinError()
+            
+        if width > current_width:
+            grow(width, current_height)
+        elif width < current_width:
+            shrink(width, current_height)
+
+        #now width's been taken care of, hopefully
+        if height > current_height:
+            grow(width, height)
+        elif height < current_height:
+            shrink(width, height)
     
     def set_title(self, title):
         self.SetConsoleTitle(create_unicode_buffer(title))

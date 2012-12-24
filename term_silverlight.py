@@ -1,5 +1,5 @@
 import repl
-from System.Threading import Thread
+from System.Threading import Thread, ThreadStart
 from System.Collections.Generic import List
 window = repl.window
 max_x = window.cols
@@ -16,6 +16,30 @@ def init(*args, **kwargs):
     clear()
     window.setup_input_handler.InvokeSelf()
     window.set_message.InvokeSelf("Terminal ready.")
+
+def monkey_patch():
+    """
+        Patch the heck out of the standard library for various quirks
+    """
+    def sleep(amount):
+        Thread.CurrentThread.Join(int(amount*100))
+    time.sleep = sleep
+   
+    class PatchedThread(object):
+        def __init__(self, target):
+            self.target = target 
+
+        def start(self):
+            log.debug("starting new thread")
+            t = Thread(ThreadStart(self.target))
+            t.IsBackground = True
+            t.Start()
+
+    import threading
+    threading.Thread = PatchedThread
+    log.debug("patches applied")
+
+monkey_patch()
 
 def clear():
     global cell_changes

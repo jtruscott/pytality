@@ -246,6 +246,9 @@ def getkey():
             raise KeyboardInterrupt()
         
         if len(key) == 1 and  (1 <= ord(key) <= 26):
-            #ctrl+letter
+            #ctrl+letter, except tab (which is ctrl-i technically)
+            if key == '\t':
+                return key
+                
             return "ctrl-%s" % chr(ord(key) + 96)
         return key

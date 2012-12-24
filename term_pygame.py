@@ -61,16 +61,21 @@ cursor_y = 0
 cursor_type = None
 
 class CursorThread(threading.Thread):
-    quit = False
+    def __init__(self, *args, **kwargs):
+        super(CursorThread, self).__init__(*args, **kwargs)
+        self.quitEvent = threading.Event()
+
     def run(self):
         blink = True
-        while not self.quit:
+        while True:
             blink = not blink
             try:
                 pygame.event.post(pygame.event.Event(USEREVENT, blink=blink))
             except pygame.error:
                 return
-            time.sleep(0.5)
+
+            if self.quitEvent.wait(timeout=0.5):
+                break
 
 def init(use_cp437=True):
     pygame.init()
@@ -188,6 +193,8 @@ def clear():
 def resize(width, height):
     global screen
     screen = pygame.display.set_mode((width*W, height*H))
+    #we don't use alpha, and turning it off makes it a tad faster
+    screen.set_alpha(None)
     
     #load the console images to blit later
     load_sprites()
@@ -204,7 +211,7 @@ def reset():
     pygame.display.quit()
     global quit
     quit = True
-    cursor_thread.quit = True
+    cursor_thread.quitEvent.set()
     cursor_thread.join()
 
 def move_cursor(x, y):
@@ -226,14 +233,11 @@ def set_cursor_type(i):
     restore_character()
     cursor_type = cursor_map[i]
 
-def blit_at(x, y, fg, bg, ch):
+
+def cache_sprite(fg, bg, ch):
     bg_sprite = sprites['bg']
     fg_sprite = sprites[fg]
     index = ord(ch)
-
-    #coordinates on the screen
-    screen_x = x * W
-    screen_y = y * H
 
     #coordinates on the bg sprite map
     bg_x = bg * W
@@ -242,20 +246,55 @@ def blit_at(x, y, fg, bg, ch):
     fg_x = (index % 16) * W
     fg_y = int(index / 16) * H
 
-    #blit the background and foreground to the screen
-    screen.blit(bg_sprite, dest=(screen_x, screen_y), area=pygame.Rect(bg_x, 0, W, H))
-    screen.blit(fg_sprite, dest=(screen_x, screen_y), area=pygame.Rect(fg_x, fg_y, W, H))
+    cell_sprite = pygame.Surface((W, H))
+    #voodoo: this helps a little bit.
+    cell_sprite.set_alpha(None)
+
+    #blit the background and foreground to the cell
+    cell_sprite.blit(bg_sprite, dest=(0, 0), area=pygame.Rect(bg_x, 0, W, H))
+    cell_sprite.blit(fg_sprite, dest=(0, 0), area=pygame.Rect(fg_x, fg_y, W, H))
+    sprites[(fg, bg, ch)] = cell_sprite
+    return cell_sprite
+
+def blit_at(x, y, fg, bg, ch):
+    #blit one character to the screen.
+    #because function calls are pricey, this is also inlined (ew) in draw_buffer, so the contents are kept short.
+
+    #coordinates on the screen
+    screen_x = x * W
+    screen_y = y * H
+
+    #cache each (bg, fg, index) cell we draw into a surface so it's easier to redraw.
+    #it's a little bit of a memory waste, and takes longer on the first draw, but we're dealing with ascii here
+    #so there's probably a lot of reuse.
+    try:
+        cell_sprite = sprites[(fg, bg, ch)]
+    except KeyError:
+        #make a new one
+        cell_sprite = cache_sprite(fg, bg, ch)
+    
+    #blit the cell to the screen
+    screen.blit(cell_sprite, dest=(screen_x, screen_y))
+    
+    
+        
+
    
 def draw_buffer(source, start_x, start_y):
-    #log.debug("drawing a w=%r, h=%r buffer at x=%r, y=%r", source.width, source.height, start_x, start_y)
-    #log.debug("firstfour: %r", source._data[0][:4])
-    #render the buffer to our backing
-    global cell_data
+    """
+        render the buffer to our backing.
+
+        This is a hotpath, and there's more microoptimization here than i'd like, but FPS is kindof important.
+    """
 
     y = start_y
     
-    #lookups we can cache
+    #lookups we can cache into locals
+    #i know, it's such a microoptimization, but this path qualifies as hot
+    local_cell_data, local_sprites, local_screen = cell_data, sprites, screen
+    local_W, local_H = W, H
     width, height = max_x, max_y
+    source_width = source.width
 
     for row in source._data:
         if y < 0:
@@ -264,18 +303,36 @@ def draw_buffer(source, start_x, start_y):
         if y >= height:
             break
         x = start_x
-        for fg, bg, ch in row[:source.width]:
-            if x < 0:
-                x += 1
-                continue
-            if x >= width:
+
+        #do something analogous to row[:source.width]
+        #but without the pointless copy that requires
+        w = 0
+        for fg, bg, ch in row:
+            if x >= width or w >= source_width:
                 break
 
-            blit_at(x, y, fg, bg, ch)
-            #remember the info for get_at
-            cell_data[y][x] = [fg, bg, ch]
-            
+            if x >= 0:
+                #no need to blit if it's already identical
+                old_data = local_cell_data[y][x]
+                new_data = [fg, bg, ch]
+
+                if new_data != old_data:
+                    #draw it and remember the info for our cache
+                    #this used to call blit_at but now it's inline.
+                    try:
+                        cell_sprite = sprites[(fg, bg, ch)]
+                    except KeyError:
+                        #make a new one
+                        cell_sprite = cache_sprite(fg, bg, ch)
+                    
+                    #blit the cell to the screen
+                    local_screen.blit(cell_sprite, dest=(x*local_W, y*local_H))
+
+                    #remember the info for the cache
+                    local_cell_data[y][x] = new_data
+                
             x += 1
+            w += 1
         y += 1
 
     source.dirty = False

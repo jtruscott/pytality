@@ -2,13 +2,14 @@
 
 Pytality is a library for writing games that use the text console and all of it's features.
 It was written as a reusable library after making two seperate terminal games for Ludum Dare and Pyweek.
+It's been tested in compo conditions in a later Ludum Dare and occasionally improved.
 
 Supported Features
 ------------------
 * the 16 ANSI colors
 * the 256 CP437 characters
 * double-buffered rendering
-* blitting of rectanglular data regions
+* blitting of rectangular data regions
 * managing of colorized "rich text"
 
 Supported Platforms

@@ -316,7 +316,10 @@ class RichText(BaseText):
             rows = new_rows
 
         #pad
-        width = max([len(r) for r in rows])
+        if self.wrap_to:
+            width = self.wrap_to
+        else:
+            width = max([len(r) for r in rows])
         for row in rows:
             while len(row) < width:
                 row.append([self.bg, self.bg, ' '])
@@ -608,6 +611,16 @@ class Scrollbar(PlainText):
         self.boxtype = boxtype
         PlainText.__init__(self, boxtype.scrollbar_top)
 
+class NoScrollbar(Scrollbar):
+    def __init__(self):
+        PlainText.__init__(self, '')
+        
+    def reposition(self, *args):
+        self.height = 0
+        self.width = 0
+        self.y = 0
+        return
+
 class EdgeScrollbar(Scrollbar):
     """
     A scrollbar designed to be placed on the right border of a Box.
@@ -688,7 +701,7 @@ class BufferView(Buffer):
         for row in _data:
             for cell in row[:max_width]:
     "
-    to iterative over buffers, which is currently true.
+    to iterate over buffers, which is currently true.
     """
     def __init__(self, width, height, parent, view_x=0, view_y=0, **kwargs):
         Buffer.__init__(self, width=width, height=height, **kwargs)

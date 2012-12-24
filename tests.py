@@ -10,6 +10,8 @@ colors = term.colors
 import buffer, boxtypes
 
 import pprint
+import random
+import time
 import logging
 log = logging.getLogger("test")
 
@@ -27,6 +29,7 @@ class PytalityCase(unittest.TestCase):
         else:
             term.init(width=self.width, height=self.height)
         term.clear()
+        term.set_title(self._testMethodName)
 
     def tearDown(self):
         term.move_cursor(x=0, y=max(0, self.height-8))
@@ -103,10 +106,31 @@ class Term(PytalityCase):
         self.tearDown()
 
     def test_resize(self):
+        #change both
         term.resize(80, 24)
+        # try it twice to change nothing
+        term.resize(80, 24)
+        #grow both
         term.resize(120, 60)
+
+        #shrink Y
         term.resize(120, 59)
+        #grow Y
         term.resize(120, 61)
+
+        #shrink X
+        term.resize(118, 61)
+        #grow X
+        term.resize(120, 61)
+
+        #grow one, shrink the other
+        term.resize(121, 60)
+        term.resize(119, 62)
+
+        #change nothing
+        term.resize(119, 62)
+
+        #restore
         term.resize(self.width, self.height)
 
     def test_not_setup(self):
@@ -207,6 +231,70 @@ class Buffer(PytalityCase):
         self.check(self.width-2, self.height-2, ch=boxtypes.BoxDouble.tl)
         self.check(self.width-1, self.height-1, bg=colors.BLUE)
 
+    def test_large_random_blit(self):
+        #let's make this test random yet deterministic
+        r = random.Random()
+        r.seed(1356317227)
+
+        def make_box():
+            return buffer.Buffer(width=self.width, height=self.height, data=[
+                [
+                    [int(r.triangular(0, 15)), int(r.triangular(0, 7)), chr(r.randint(0, 255))]
+                    for x in range(self.width)
+                ] for y in range(self.height)
+            ])
+        box = make_box()
+
+        for i in range(10):
+            for i in range(80):
+                box.set_at(
+                    x=r.randint(0, self.width-1), 
+                    y=r.randint(0, self.height-1), 
+                    char=chr(r.randint(0, 255)),
+                    fg=int(r.triangular(0, 15)),
+                    bg=int(r.triangular(0, 7)),
+                )
+            box.draw()
+            term.flip()
+
+        for i in range(15):
+            box = make_box()
+            box.draw()
+            term.flip()
+
+    def test_allcharacters(self):
+        r = random.Random()
+        r.seed(1356317227)
+
+        def make_box(start_color):
+            box = buffer.Buffer(width=self.width, height=self.height)
+            i = 0
+            bg = start_color
+            fg = 0
+            for x in range(self.width):
+                for y in range(self.height):
+                    fg += 1
+                    if fg == 16:
+                        fg = 0
+                        bg += 1
+                        if bg % 8 == 0:
+                            bg = 0
+
+                    box.set_at(
+                        x=x, 
+                        y=y, 
+                        char=chr(i % 256), 
+                        bg=bg,
+                        fg=fg
+                    )
+                    i += 1
+            return box
+        boxes= [make_box(i) for i in range(16)]
+
+        for i in range(30):
+            r.choice(boxes).draw()
+            term.flip()
+
 class PlainText(PytalityCase):
     def test_make_text(self):
         msg = "abcdef"
@@ -259,6 +347,36 @@ class Box(PytalityCase):
         self.check(12, 13, SPACE)
         self.check(13, 12, SPACE)
         self.check(17, 17, boxtypes.BoxDouble.br, fg=colors.RED, bg=colors.LIGHTRED)
+
+    def test_nested(self):
+        r = random.Random()
+        r.seed(1356317227)
+
+        root = buffer.Buffer(width=0, height=0)
+        current = root
+        all = []
+        i = 0
+        for sub in range(0, min(self.height, self.width), 4):
+            h = self.height - sub
+            w = self.width - sub
+            i += 1
+            b = buffer.Box(width=w, height=h, border_fg=(i % 16), border_bg=(i + 1) % 8)
+            current.children.append(b)
+            all.append(b)
+            current = b
+
+        for i in range(30):
+            root.draw()
+            b = r.choice(all)
+            for j in range(20):
+                b.set_at(
+                    x=r.randint(0, b.width-1), 
+                    y=r.randint(0, b.height-1),
+                    char=chr(r.randint(0, 255)),
+                    fg=int(r.triangular(0, 15)),
+                    bg=int(r.triangular(0, 7)),
+                )
+            term.flip()
 
     def skip_test_permute(self):
         import cgitb
@@ -405,9 +523,58 @@ class MessageBox(PytalityCase):
             self.scroll(1)
         self.check(r, b, bt.scrollbar_bottom)
 
+
+class Microgames(PytalityCase):
+
+    def test_waterfall(self):
+        #make a silly little waterfall
+        r = random.Random()
+        r.seed(1356317227)
+
+        center = 0
+        def make_fall():
+            color = random.choice([colors.WHITE, colors.LIGHTGREY, colors.LIGHTBLUE, colors.BLUE])
+            x = int(random.triangular(0, self.width, mode=center))
+            return buffer.Buffer(width=1, height=5, x=x, y=-4, data=[
+                [[color, colors.BLACK, ' ']],
+                [[color, colors.BLACK, '\xb0']],
+                [[color, colors.BLACK, '\xb1']],
+                [[color, colors.BLACK, '\xb2']],
+                [[color, colors.BLACK, '\xdb']],
+            ])
+        items = [make_fall()]
+
+        frames = 150
+        start = time.time()
+        for i in range(frames):
+            if i < frames/2:
+                center += 1
+            else:
+                center -= 1
+
+            items.extend([make_fall() for _ in range(4)])
+            for item in items:
+                item.y += 1
+                if item.y > self.height:
+                    items.remove(item)
+                else:
+                    item.draw()
+            term.flip()
+        end = time.time()
+        fps = frames/(end-start)
+        log.debug("waterfall FPS: %r", fps)
+        self.assertGreater(fps, 40)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] in ['silverlight', 'pygame', 'winconsole', 'curses']:
         PytalityCase.force_backend = sys.argv.pop(1)
 
-    unittest.main()
+    if 'profile' in sys.argv:
+        sys.argv.remove('profile')
+        import cProfile
+        cProfile.run("unittest.main()")
+
+    else:
+        unittest.main()
