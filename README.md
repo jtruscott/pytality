@@ -16,7 +16,7 @@ Supported Platforms
 -------------------
 * windows (using ctypes wrappers to the Win32 APIs)
 * linux/mac (using curses)
-* inside the browser (via IronPython + Silverlight/Moonlight)
+* (experimental) inside the browser (via IronPython + Silverlight/Moonlight)
 * windows/linux/mac (using pygame)
 
 Requirements
@@ -70,6 +70,10 @@ The level of support for the various backends does vary.
     some characters should look like, resulting in all the fun font, margin, and sizing issues typically associated with HTML/CSS work.
     Additionally, it's not possible to portably resize a curses terminal from inside, leading to "my screen is too small!" bug reports.
 
-* The silverlight backend is as wacky as it sounds. It's a fascinating proof of concept, but I wouldn't rely on it.
+* The ironpython+silverlight backend is as wacky as it sounds. It's a fascinating proof of concept, but I wouldn't rely on it.
+* More backends are possible!
+    
+   The silverlight experiment was done to try running in-browser, which is desirable for Ludum Dare entries. 
+   It may also be possible to use IronPython in Unity3d to accomplish that goal. Jython unfortunately doesn't support applets.
 
 You can call `pytality.term.init(backends=["pygame", "winconsole"])` to specify what backends are allowed.
