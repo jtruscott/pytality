@@ -134,34 +134,43 @@ def set_cursor_type(i):
     C.set_cursor_type(i)
 
 def draw_buffer(source, start_x, start_y):
-    #log.debug("drawing a w=%r, h=%r buffer at x=%r, y=%r", source.width, source.height, start_x, start_y)
-    #log.debug("firstfour: %r", source._data[0][:4])
-    #render the buffer to our backing
+    """
+    Render a buffer to our backing.
+
+    in the current double-buffered console model, blitting is quite cheap (two assignments!), but the flip is expensive.
+
+    The actual flip (using SetConsoleOutput) has strange performance characteristics. It's clearly been optimized for text -
+    the more irregular the data is, the longer it takes!
+    """
     y = start_y
+    #lookups we can cache into locals
+    #i know, it's such a microoptimization, but this path qualifies as hot
+    backing_buffer = backing.buffer
+    backing_width, backing_height = backing.width, backing.height
+    source_width = source.width
+
     for row in source._data:
         if y < 0:
             y += 1
             continue
-        if y >= backing.height:
+        if y >= backing_height:
             break
         x = start_x
-        for fg, bg, ch in row[:source.width]:
-            if x < 0:
-                x += 1
-                continue
-            if x >= backing.width:
+
+        #do something analogous to row[:source.width]
+        #but without the pointless copy that requires
+        w = 0
+        for fg, bg, ch in row:
+            if x >= backing_width or w >= source_width:
                 break
-            #log.debug("x=%r y=%r, fg=%r bg=%r ch=%r", x, y, fg, bg, ch)
-            #convert the character
-            try:
-                coord = backing.buffer[(y*backing.width) + x]
-            except:
-                log.exception("could not index x=%r, y=%r", x, y)
-                raise
-            coord.attr = fg + (bg << 4)
-            coord.ascii = ch
-            
+
+            if x >= 0:
+                cell = backing_buffer[(y * backing_width) + x]
+                cell.attr = fg + (bg << 4)
+                cell.ascii = ch
+                
             x += 1
+            w += 1
         y += 1
 
     source.dirty = False

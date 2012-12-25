@@ -293,14 +293,14 @@ def draw_buffer(source, start_x, start_y):
     #i know, it's such a microoptimization, but this path qualifies as hot
     local_cell_data, local_sprites, local_screen = cell_data, sprites, screen
     local_W, local_H = W, H
-    width, height = max_x, max_y
+    screen_width, screen_height = max_x, max_y
     source_width = source.width
 
     for row in source._data:
         if y < 0:
             y += 1
             continue
-        if y >= height:
+        if y >= screen_height:
             break
         x = start_x
 
@@ -308,7 +308,7 @@ def draw_buffer(source, start_x, start_y):
         #but without the pointless copy that requires
         w = 0
         for fg, bg, ch in row:
-            if x >= width or w >= source_width:
+            if x >= screen_width or w >= source_width:
                 break
 
             if x >= 0:
