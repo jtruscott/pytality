@@ -561,9 +561,52 @@ class Microgames(PytalityCase):
                     item.draw()
             term.flip()
         end = time.time()
-        fps = frames/(end-start)
-        log.debug("waterfall FPS: %r", fps)
+        fps = frames / (end - start)
+        log.debug("waterfall FPS: %.2f over %r frames", fps, frames)
         self.assertGreater(fps, 40)
+
+    def test_pattern(self):
+        #inspired by the space-filler algorithm at https://dl.dropbox.com/u/1094010/Projs/spacefill.html
+        #designed to use a lot of little buffers as an alternate performance test
+        #it flips a new frame on every 25 calculations, to be a little fair to poor slow-flip winconsole
+        r = random.Random()
+        r.seed(1356317227)
+        seen = set()
+        candidates = [(r.randint(0, self.width), r.randint(0, self.height), 0)]
+        step = 0
+        buffers = []
+        
+        start = time.time()
+
+        # just count the last one now
+        draws = 1  
+        while candidates:
+            next_index = step % len(candidates)
+            x, y, depth = candidates.pop(next_index)
+            step += 1
+            for xoff, yoff in [(-1, 0), (0, -1), (1, 0), (0, 1)]:
+                nx = x + xoff
+                ny = y + yoff
+                if (nx, ny) in seen or nx < 0 or ny < 0 or nx > self.width or ny > self.height:
+                    continue
+                seen.add((nx, ny))
+                candidates.append((nx, ny, depth+1))
+
+            b = buffer.Buffer(x=x, y=y, width=1, height=1, data=[
+                [
+                    [step % 15 + 1, colors.BLACK, '\xb0']
+                ]
+            ])
+            buffers.append(b)
+            b.draw()
+            if step % 25 == 0:
+                term.flip()
+                draws += 1
+
+        term.flip()
+        end = time.time()
+        fps = draws / (end - start)
+        log.debug("pattern FPS: %.2f over %r frames", fps, draws)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ class colors:
 LF_FACESIZE = 32
 FONT_LUCIDA_CONSOLE = 48
 FONT_TERMINAL = 54
+ENABLE_MOUSE_INPUT = 0x10 
 
 class CHAR_INFO(Structure):
     _fields_ = ('ascii', c_char), ('attr', c_uint16)
@@ -63,8 +64,75 @@ class CONSOLE_FONT_INFO(Structure):
                 ('font_name', (WCHAR*LF_FACESIZE))
                 ]
 
+#all these to read mouse input! sheesh.
+class CHAR_UNION(Union):
+    _fields_ = [
+        ('unicode', WCHAR),
+        ('ascii', c_char),
+    ]
 
-class Console:
+class KEY_EVENT_RECORD(Structure):
+    _fields_ = [
+        ('key_down', BOOL),
+        ('repeat_count', WORD),
+        ('virtual_key_code', WORD),
+        ('virtual_scan_code', WORD),
+        ('char', CHAR_UNION),
+        ('control_key_state', DWORD),
+    ]
+
+class MOUSE_EVENT_RECORD(Structure):
+    _fields_ = [
+        ('mouse_position', COORD),
+        ('button_state', DWORD),
+        ('control_key_state', DWORD),
+        ('flags', DWORD),
+    ]
+    LEFT_BUTTON_PRESSED = 0x0001 
+    RIGHT_BUTTON_PRESSED = 0x0002
+
+class WINDOW_BUFFER_SIZE_RECORD(Structure):
+    _fields_ = [
+        ('dwSize', COORD),
+    ]
+
+class MENU_EVENT_RECORD(Structure):
+    _fields_ = [
+        ('dwCommandId', UINT),
+    ]
+
+class FOCUS_EVENT_RECORD(Structure):
+    _fields_ = [
+        ('bSetFocus', BOOL),
+    ]
+
+class INPUT_RECORD_UNION(Union):
+    _fields_ = [
+        ('key_event', KEY_EVENT_RECORD),
+        ('mouse_event', MOUSE_EVENT_RECORD),
+        ('window_event', WINDOW_BUFFER_SIZE_RECORD),
+        ('menu_event', MENU_EVENT_RECORD),
+        ('focus_event', FOCUS_EVENT_RECORD),
+    ]
+
+class INPUT_RECORD(Structure):
+    _anonymous_ = ("event",)
+    _fields_ = [
+        ('event_type', WORD),
+        ('event', INPUT_RECORD_UNION),
+    ]
+    FOCUS_EVENT = 0x0010
+    KEY_EVENT = 0x0001
+    MENU_EVENT = 0x0008
+    MOUSE_EVENT = 0x0002
+    WINDOW_BUFFER_SIZE_EVENT = 0x0004 
+
+def check_winerror(result, func, args):
+    if not result:
+        raise WinError()
+    return args
+
+class Console(object):
     FILE_SHARE_READ = 1
     FILE_SHARE_WRITE = 2
     GENERIC_WRITE = 0x40000000
@@ -81,14 +149,17 @@ class Console:
     WriteConsoleOutput = windll.kernel32.WriteConsoleOutputA
     WriteConsoleOutput.argtypes = (HANDLE, c_void_p, COORD, COORD, POINTER(SMALL_RECT))
     WriteConsoleOutput.restype = BOOL
+    WriteConsoleOutput.errcheck = check_winerror
 
     GetConsoleScreenBufferInfo = windll.kernel32.GetConsoleScreenBufferInfo
     GetConsoleScreenBufferInfo.argtypes = (HANDLE, POINTER(CONSOLE_SCREEN_BUFFER_INFO))
     GetConsoleScreenBufferInfo.restype = BOOL
+    GetConsoleScreenBufferInfo.errcheck = check_winerror
 
     SetConsoleWindowInfo = windll.kernel32.SetConsoleWindowInfo
     SetConsoleWindowInfo.argtypes = (HANDLE, BOOL, POINTER(SMALL_RECT))
     SetConsoleWindowInfo.restype = BOOL
+    SetConsoleWindowInfo.errcheck = check_winerror
     
     FillConsoleOutputCharacter = windll.kernel32.FillConsoleOutputCharacterA
     FillConsoleOutputAttribute = windll.kernel32.FillConsoleOutputAttribute
@@ -98,31 +169,53 @@ class Console:
     SetConsoleTitle = windll.kernel32.SetConsoleTitleW
     SetConsoleCursorInfo = windll.kernel32.SetConsoleCursorInfo
     SetConsoleCursorInfo.argtypes = (HANDLE, POINTER(CONSOLE_CURSOR_INFO))
+    SetConsoleCursorInfo.errcheck = check_winerror
+
+    ReadConsoleInput = windll.kernel32.ReadConsoleInputA
+    ReadConsoleInput.argtypes = (HANDLE, POINTER(INPUT_RECORD), DWORD, POINTER(DWORD))
+    ReadConsoleInput.restype = BOOL
+    ReadConsoleInput.errcheck = check_winerror
 
     try:
         #These functions are only available on Vista and above
         GetCurrentConsoleFontEx = windll.kernel32.GetCurrentConsoleFontEx
-        GetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
-        GetCurrentConsoleFontEx.restype = BOOL
-
         SetCurrentConsoleFontEx = windll.kernel32.SetCurrentConsoleFontEx
-        SetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
-        SetCurrentConsoleFontEx.restype = BOOL
     except:
         GetCurrentConsoleFontEx = None
         SetCurrentConsoleFontEx = None
+    else:
+        GetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
+        GetCurrentConsoleFontEx.restype = BOOL
+        GetCurrentConsoleFontEx.errcheck = check_winerror
+
+        SetCurrentConsoleFontEx.argtypes = (HANDLE, BOOL, POINTER(CONSOLE_FONT_INFO))
+        SetCurrentConsoleFontEx.restype = BOOL
+        SetCurrentConsoleFontEx.errcheck = check_winerror
 
     SetConsoleOutputCP = windll.kernel32.SetConsoleOutputCP
     SetConsoleOutputCP.argtypes = (UINT,)
     SetConsoleOutputCP.restype = BOOL
+    SetConsoleOutputCP.errcheck = check_winerror
 
     SetConsoleScreenBufferSize = windll.kernel32.SetConsoleScreenBufferSize
     SetConsoleScreenBufferSize.argtypes = (HANDLE, COORD)
     SetConsoleScreenBufferSize.restype = BOOL
+    SetConsoleScreenBufferSize.errcheck = check_winerror
+
+    GetConsoleMode = windll.kernel32.GetConsoleMode
+    GetConsoleMode.argtypes = (HANDLE, POINTER(DWORD))
+    GetConsoleMode.restype = BOOL
+    GetConsoleMode.errcheck = check_winerror
+
+    SetConsoleMode = windll.kernel32.SetConsoleMode
+    SetConsoleMode.argtypes = (HANDLE, DWORD)
+    SetConsoleMode.restype = BOOL
+    SetConsoleMode.errcheck = check_winerror
 
     def __init__(self):
         self.input = self.get_console_handle('CONIN$')
         self.output = self.get_console_handle('CONOUT$')
+        self.mouse_enabled = False
 
     def get_console_handle(self, name):
         """
@@ -207,9 +300,7 @@ class Console:
             return None
         cfi = CONSOLE_FONT_INFO()
         cfi.size = sizeof(cfi)
-        ret = self.GetCurrentConsoleFontEx(self.output, False, pointer(cfi))
-        if not ret:
-            raise WinError()
+        self.GetCurrentConsoleFontEx(self.output, False, pointer(cfi))
         log.info("Font information: w=%r, h=%r, index=%r, name=%r",
                 cfi.font_size.x, cfi.font_size.y,
                 repr(cfi.font_index), repr(cfi.font_name))
@@ -217,12 +308,10 @@ class Console:
 
     def _get_screen_info(self):
         csbi = CONSOLE_SCREEN_BUFFER_INFO()
-        ret = self.GetConsoleScreenBufferInfo(
+        self.GetConsoleScreenBufferInfo(
             self.output,
             pointer(csbi)
         )
-        if not ret:
-            raise WinError()
         return csbi
 
     def move_cursor(self, x, y):
@@ -249,9 +338,7 @@ class Console:
         #437: cp437
         #65001: utf-8?
         #only works for raster fonts.
-        ret = self.SetConsoleOutputCP(code_page)
-        if not ret:
-            raise WinError()
+        self.SetConsoleOutputCP(code_page)
 
     def set_cursor_type(self, newtype):
         cci = CONSOLE_CURSOR_INFO()
@@ -264,9 +351,7 @@ class Console:
         else:
             cci.size = self.SOLID_CURSOR_SIZE
             cci.visible = True
-        ret = self.SetConsoleCursorInfo(self.output, byref(cci))
-        if not ret:
-            raise WinError()
+        self.SetConsoleCursorInfo(self.output, byref(cci))
 
     def set_font_info(self, x=8, y=12, font=FONT_TERMINAL):
         if self.SetCurrentConsoleFontEx is None:
@@ -276,9 +361,7 @@ class Console:
         cfi.font_size.x = x
         cfi.font_size.y = y
         cfi.font_family = font
-        ret = self.SetCurrentConsoleFontEx(self.output, False, pointer(cfi))
-        if not ret:
-            raise WinError()
+        self.SetCurrentConsoleFontEx(self.output, False, pointer(cfi))
 
     def set_size(self, width, height):
         """
@@ -308,25 +391,17 @@ class Console:
 
         def shrink(new_width, new_height):
             #first, we're gonna need a smaller window
-            ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, new_width-1, new_height-1))
-            if not ret:
-                raise WinError()
+            self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, new_width-1, new_height-1))
 
             #then, we're gonna need a smaller buffer
-            ret = self.SetConsoleScreenBufferSize(self.output, COORD(new_width, new_height))
-            if not ret:
-                raise WinError()
+            self.SetConsoleScreenBufferSize(self.output, COORD(new_width, new_height))
 
         def grow(new_width, new_height):
             #first, we're gonna need a bigger buffer
-            ret = self.SetConsoleScreenBufferSize(self.output, COORD(new_width, new_height))
-            if not ret:
-                raise WinError()
+            self.SetConsoleScreenBufferSize(self.output, COORD(new_width, new_height))
 
             #then, we're gonna need a matching window size
-            ret = self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, new_width-1, new_height-1))
-            if not ret:
-                raise WinError()
+            self.SetConsoleWindowInfo(self.output, True, SMALL_RECT(0, 0, new_width-1, new_height-1))
             
         if width > current_width:
             grow(width, current_height)
@@ -342,8 +417,52 @@ class Console:
     def set_title(self, title):
         self.SetConsoleTitle(create_unicode_buffer(title))
 
+    def enable_mouse_input(self):
+        console_mode = DWORD()
+        self.GetConsoleMode(self.input, console_mode)
+        print 'mode', console_mode.value, console_mode.value & ENABLE_MOUSE_INPUT
 
-class ConsoleBuffer:
+        console_mode.value |= ENABLE_MOUSE_INPUT
+        self.SetConsoleMode(self.input, console_mode)
+        self.mouse_enabled = True
+
+    def read_input(self):
+        """
+        BOOL WINAPI ReadConsoleInput(
+          _In_   HANDLE hConsoleInput,
+          _Out_  PINPUT_RECORD lpBuffer,
+          _In_   DWORD nLength,
+          _Out_  LPDWORD lpNumberOfEventsRead
+        );
+        """
+        input_array = (INPUT_RECORD * 10)()
+        
+        if not self.mouse_enabled:
+            self.enable_mouse_input()
+
+        num_read = DWORD()
+        self.ReadConsoleInput(self.input, input_array, len(input_array), num_read)
+        console.move_cursor(0, 0)
+        print num_read.value, 'events'
+        for i in range(num_read.value):
+            item = input_array[i]
+            event_type = item.event_type
+            print event_type
+            if event_type == item.KEY_EVENT:
+                key_event = item.key_event
+                print 'key', key_event.virtual_scan_code, repr(key_event.char.ascii)
+            elif event_type == item.MOUSE_EVENT:
+                mouse_event = item.mouse_event
+                left_pressed = bool(mouse_event.button_state & mouse_event.LEFT_BUTTON_PRESSED)
+                right_pressed = bool(mouse_event.button_state & mouse_event.RIGHT_BUTTON_PRESSED)
+                x = mouse_event.mouse_position.x
+                y = mouse_event.mouse_position.y
+                print 'mouse', mouse_event.button_state, mouse_event.flags, left_pressed, right_pressed, x, y
+                console.move_cursor(x, y)
+                return left_pressed
+
+
+class ConsoleBuffer(object):
     def __init__(self, width, height):
         self.buffer = self.create_buffer(width, height)
         self.width = width
@@ -365,13 +484,14 @@ class ConsoleBuffer:
 
         WriteConsoleOutputA (hConOut, pCI, dwBufferSize, 
         dwBufferOrg, &srDest);
+
+        While it's faster to use the lpWriteRegion parameter to only redraw the area that's changed, it's got weird bugs - 
+        at least on Windows 7, when using it it leaves behind visible one-pixel "seams" along the edge of the region. I guess
+        there's an off-by-one bug somewhere when calculating the margins?
         """
         if not width or not height or not len(self.buffer):
-            #log.debug("drawing, x=%r, y=%r, w=%r, h=%r, len=%r", x, y, source.width, source.height, len(self.buffer))
-            #log.debug("aborting a null draw")
             return
-        #t = time.time()
-        #print 'making args'
+
         buffer_size = COORD(width, height)
         buffer_coord = COORD(0, 0)
         write_region = SMALL_RECT(
@@ -380,14 +500,8 @@ class ConsoleBuffer:
             x + width - 1,
             y + height - 1
         )
-        #print 'writing'
-        ret = console.WriteConsoleOutput(console.output, byref(self.buffer), buffer_size, buffer_coord, byref(write_region))
-        if not ret: 
-            raise WinError()
-        #t = time.time() - t
-        #print 'ret', ret
-        #print 'took', t
-        return #t
+        console.WriteConsoleOutput(console.output, byref(self.buffer), buffer_size, buffer_coord, byref(write_region))
+        return
 
 if __name__ == "__main__":
     def stats(times):
@@ -469,11 +583,17 @@ if __name__ == "__main__":
         console.set_color(bg=colors.BLACK, fg=colors.LIGHTGREY)
         print 'lightgrey on white'
 
+    def read_input_test():
+        while True:
+            if console.read_input():
+                break
+
     #----
     console = Console()
-    clearing_test()
-    cursor_test()
-    xy_test()
-    title_test()
-    font_test()
-    set_color_test()
+    read_input_test()
+    #clearing_test()
+    #cursor_test()
+    #xy_test()
+    #title_test()
+    #font_test()
+    #set_color_test()
